@@ -33,7 +33,7 @@
 
 > Windows paths. `%LOCALAPPDATA%` is usually `C:\Users\<you>\AppData\Local`.
 
-**① Backend** — copy the repo's `backend/plugins/video-xray/` folder to:
+**① Backend** — copy the plugin files from the **root of this repo** (`plugin.yaml`, `__init__.py`, `engine/`, `dashboard/`) to:
 
 ```
 %LOCALAPPDATA%\hermes\plugins\video-xray\
@@ -47,7 +47,7 @@
 
 Then fully quit Hermes Desktop and reopen it (this restarts the gateway and loads the backend).
 
-**③ Frontend hot-load** — copy the repo's `desktop/desktop-plugins/video-xray/plugin.js` to:
+**③ Frontend hot-load** — copy the repo's `desktop/plugin.js` to:
 
 ```
 %LOCALAPPDATA%\hermes\desktop-plugins\video-xray\plugin.js
@@ -78,13 +78,13 @@ Any **OpenAI-compatible** `/v1/audio/transcriptions` service: fill base URL + mo
 
 ### R2T2 — best local Chinese transcription (optional, ~3.5 GB download)
 
-R2T2 is NetEase Youdao's open-source [Confucius4-R2T2](https://github.com/netease-youdao/Confucius4-R2T2) speech engine (code Apache-2.0; weights free for commercial use). This repo ships the **adapter source** (`r2t2-runtime/`); you fetch the runtime binaries and weights yourself:
+R2T2 is NetEase Youdao's open-source [Confucius4-R2T2](https://github.com/netease-youdao/Confucius4-R2T2) speech engine (code Apache-2.0; weights free for commercial use). This repo ships the **adapter source** (`docs/r2t2-runtime/`); you fetch the runtime binaries and weights yourself:
 
 Target layout:
 
 ```
 %LOCALAPPDATA%\hermes\asr-r2t2\
-├── worker.py, smoke.py          ← copy from this repo's r2t2-runtime/
+├── worker.py, smoke.py          ← copy from this repo's docs/r2t2-runtime/
 ├── core\confucius\*.py          ← same (upstream engine source + patches)
 ├── runtime\
 │   ├── python\                  ← embedded Python 3.12 (step ②)
@@ -92,7 +92,7 @@ Target layout:
 └── models\                      ← the four weight files (step ③)
 ```
 
-**① Adapter layer**: copy `worker.py`, `smoke.py` and `core/` from this repo's `r2t2-runtime/` into `%LOCALAPPDATA%\hermes\asr-r2t2\`.
+**① Adapter layer**: copy `worker.py`, `smoke.py` and `core/` from this repo's `docs/r2t2-runtime/` into `%LOCALAPPDATA%\hermes\asr-r2t2\`.
 
 **② Runtime** (embedded Python + native libs, ~300 MB): download any 0.2.x `…-NoMainModel.zip` portable pack from [T8mars/Strata-T8 releases](https://github.com/T8mars/Strata-T8/releases) and copy two trees:
 
@@ -140,7 +140,7 @@ After a job completes, the detail view exports the report (`.md`) and the revers
 - Windows runtime binaries redistributed by [T8mars](https://github.com/T8mars) ([Strata-T8](https://github.com/T8mars/Strata-T8) MIT; [R2T2 node](https://github.com/T8mars/comfyui-confucius-r2t2-t8) follows upstream Apache-2.0) — thanks for enabling derivative-friendly use; this plugin and their packs cross-promote each other
 - Underlying inference: [ggml ggml / llama.cpp](https://github.com/ggml-org/llama.cpp) (MIT, see runtime `NOTICE`), [FireRedVAD](https://github.com/FireRedTeam/FireRedVAD) (Apache-2.0)
 - Alternate transcription: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (MIT)
-- This plugin's own code (including the `r2t2-runtime/` adapter and patches): Apache-2.0 — see [LICENSE](LICENSE) / [NOTICE.md](NOTICE.md)
+- This plugin's own code (including the `docs/r2t2-runtime/` adapter and patches): Apache-2.0 — see [LICENSE](LICENSE) / [NOTICE.md](NOTICE.md)
 
 ## Gallery
 
@@ -173,7 +173,7 @@ After a job completes, the detail view exports the report (`.md`) and the revers
 
 ## Localization
 
-Wordbook lives in `desktop/desktop-plugins/video-xray/plugin.js` (`MESSAGES`, two locales today: `zh` and `en`). The host automatically falls back to English for every other locale, so a single-file translation PR instantly makes the whole UI speak your language. Welcome aboard!
+Wordbook lives in `desktop/plugin.js` (`MESSAGES`, two locales today: `zh` and `en`). The host automatically falls back to English for every other locale, so a single-file translation PR instantly makes the whole UI speak your language. Welcome aboard!
 
 ## License
 
