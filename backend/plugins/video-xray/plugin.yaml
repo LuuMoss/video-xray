@@ -1,0 +1,12 @@
+name: video-xray
+version: 0.1.0
+description: >
+  Video + audio content analysis: segment frames and hand them to the local
+  vision engine for per-segment observation (thinking-model contract); speech
+  is transcribed by a short-lived Confucius4-R2T2 worker (CPU hard-capped at
+  50%, VRAM freed on exit). Exposes the video_xray / video_xray_jobs chat
+  tools and the /video command.
+kind: standalone
+author: Moss
+provides_tools: 2
+provides_hooks: 0
