@@ -1,21 +1,32 @@
-"""Analysis engine client: one single path -- Hermes' official auxiliary LLM
-router (agent.auxiliary_client.call_llm, aux task "video_xray").
+"""Analysis engine client: one single path -- the host's official plugin LLM
+API (ctx.llm.complete), with task slots this plugin registers at load time.
 
-The router resolves provider, model and credentials from Hermes' own config
-and live runtime, so the plugin works out of the box on a local llama.cpp /
+The host resolves provider, model, credentials and routing from the user's
+own Hermes setup, so the plugin works out of the box on a local llama.cpp /
 Strata engine AND on every cloud provider Hermes supports (OpenAI,
-Anthropic, OpenRouter, custom ...) -- no plugin-specific auth, base-URL or
-port code at all. The plugin registers the "video_xray" auxiliary task at
-load time; a user who wants a dedicated analysis model just sets
-auxiliary.video_xray.provider/.model in config.yaml (standard auxiliary
-config, also editable from the desktop command center).
+Anthropic, OpenRouter, custom ...) -- zero plugin-specific auth, base-URL
+or port code. It also means analysis always rides the exact chat model the
+user is using THIS second: the host routes live, so no stale config port
+can ever strand an analysis (the 2026-11-10 dead-47831 incident this design
+retires -- its main_runtime mirror hack and its hand-rolled extra_body
+retry ladder both become host-side concerns: the host itself retries a
+provider 400 that rejects a reasoning wire control by name, #112781).
 
-Verified pitfall (local thinking engines, 11-06): reasoning arrives in
-reasoning_content and silently eats max_tokens -- pure text-shuffling calls
-(summary/compression) pass reasoning_effort="none", the only key this
-engine family honors. Strict cloud APIs may reject that borrowed key, so
-chat() retries once with extra_body dropped: correctness beats the speed
-win there.
+Two task slots split the reasoning budget:
+- OBSERVE_TASK "video_xray"           -> frame observation and H3 prompts,
+  thinking left at the model/provider default (vision observation benefits).
+- SUMMARY_TASK "video_xray_summary"  -> report writing and note compression;
+  registered with defaults {"reasoning_effort": "none"}: text-shuffling
+  calls must not let thinking silently eat max_tokens and clip the report
+  (local thinking engines put reasoning in reasoning_content; the only key
+  this engine family honors is a top-level reasoning_effort). Operators can
+  override either slot via the standard auxiliary.<key> config block.
+
+The host result carries no finish_reason, so output-token usage (zero when
+a provider reports none) approximates the old finish=="length" truncation
+signal; callers keep the exact (content, finish, usage) contract unchanged
+-- including the old failure mode: chat() raises a localized RuntimeError
+so jobs surface one clean reason instead of dying inside the gateway.
 
 Display language: system_language() reads display.language from config.yaml
 -- the exact key the desktop UI uses -- so reports follow the app language;
@@ -27,7 +38,21 @@ import base64
 import os
 import time
 
-TASK = "video_xray"          # aux task key registered in the plugin's register()
+OBSERVE_TASK = "video_xray"           # aux task slots registered in register()
+SUMMARY_TASK = "video_xray_summary"
+
+_CTX = {"ctx": None}
+
+
+def set_ctx(ctx):
+    """Called once by the plugin's register(ctx); every LLM call from then
+    on goes through ctx.llm -- the host's official, fail-closed path."""
+    _CTX["ctx"] = ctx
+
+
+def llm_ready():
+    return getattr(_CTX["ctx"], "llm", None) is not None
+
 
 _HERMES_CFG = os.path.join(
     os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes"),
@@ -112,136 +137,77 @@ def text_part(s):
     return {"type": "text", "text": s}
 
 
-def _content_of(resp):
-    """Prefer the router's own extractor (content, else reasoning fallback);
-    fall back to a plain OpenAI-shape read for odd return types."""
-    try:
-        from agent.auxiliary_client import extract_content_or_reasoning
-        text = extract_content_or_reasoning(resp)
-        if text:
-            return text
-    except Exception:  # noqa: BLE001 -- extractor optional, host shapes vary
-        pass
-    try:
-        ch = resp["choices"][0] if isinstance(resp, dict) else resp.choices[0]
-        msg = ch["message"] if isinstance(ch, dict) else ch.message
-        if isinstance(msg, dict):
-            return msg.get("content") or msg.get("reasoning_content") or ""
-        return getattr(msg, "content", None) or getattr(msg, "reasoning_content", None) or ""
-    except Exception:  # noqa: BLE001
-        return ""
-
-
-def _finish_of(resp):
-    try:
-        ch = resp["choices"][0] if isinstance(resp, dict) else resp.choices[0]
-        return (ch.get("finish_reason") if isinstance(ch, dict)
-                else getattr(ch, "finish_reason", None)) or ""
-    except Exception:  # noqa: BLE001
-        return ""
-
-
-def _usage_of(resp):
-    try:
-        u = resp.get("usage") if isinstance(resp, dict) else getattr(resp, "usage", None)
-        if u is None:
-            return {}
-        if isinstance(u, dict):
-            return u
-        dump = getattr(u, "model_dump", None)
-        return dump() if callable(dump) else {}
-    except Exception:  # noqa: BLE001
-        return {}
-
-
-# The desktop panel swaps the chat model at runtime (model selector) but
-# does NOT rewrite config.yaml's model section -- only the gateway's
-# in-process runtime mirror (refreshed every turn, readable from any
-# thread) holds the truth. The official router falls back to config.yaml
-# on worker threads (_compat_runtime_main() is main-thread-only), so
-# analysis used to die on a stale, already-dead port while chat ran fine
-# (2026-11-09 incident: chat live on 127.0.0.1:8080 SC117, config still
-# said dead 47831 SWIFT -> every job APIConnectionError, engine looked
-# "stuck"). Reading the mirror here and handing it to
-# call_llm(main_runtime=...) pins every analysis request to the very
-# model the user is chatting with -- instantly, one path, no config lag.
-# main_runtime is the official call_llm hook and never writes gateway
-# state back.
-def live_main_runtime():
-    """The session's live model as a call_llm ``main_runtime`` dict.
-
-    Returns {} when the mirror is empty (e.g. CLI without runtime binding,
-    -> plain config fallback as before) or when the user pinned an
-    explicit route for this task (config auxiliary.video_xray model /
-    base_url -- that route wins, so pass nothing and the router uses it).
-    """
-    try:
-        aux = config_get("auxiliary", TASK) or {}
-    except Exception:
-        aux = {}
-    if isinstance(aux, dict) and (aux.get("model") or aux.get("base_url")):
-        return {}
-    try:
-        from agent import auxiliary_client as _ac
-        fields = tuple(getattr(_ac, "_MAIN_RUNTIME_FIELDS", ()) or ())
-        snap = tuple(getattr(_ac, "_RUNTIME_MAIN_COMPAT_SNAPSHOT", ()) or ())
-    except Exception:
-        return {}
-    if not fields or len(fields) != len(snap):
-        return {}
-    rt = {k: v for k, v in zip(fields, snap) if v}
-    if not rt.get("model") or not rt.get("base_url"):
-        return {}
-    return rt
-
-
 def chat(parts, temperature=0.0, max_tokens=1600, timeout=300, reasoning_effort=None):
-    """Send one chat turn through the official router. Returns
-    (content, finish_reason, usage).
+    """Send one chat turn through the host plugin LLM. Returns
+    (content, finish, usage).
 
-    The same OpenAI-style content parts (text + data-URL image_url) go in as
-    the single user message; call_llm's adapter translates them per provider
-    (Anthropic image blocks etc.) -- which is exactly why the plugin needs
-    no provider code of its own.
+    The same OpenAI-style content parts (text + data-URL image_url) go in
+    as the single user message; the host's adapters translate them per
+    provider (Anthropic image blocks etc.) -- which is exactly why the
+    plugin carries no provider code of its own.
+
+    reasoning_effort="none" routes to the summary slot whose registered
+    defaults pin thinking off; anything else uses the observation slot.
+    finish is "stop" unless the host reports output tokens at (or within
+    8 of) max_tokens -- the provider-side cutoff signal, approximated
+    because the host result has no finish_reason. Raises a localized
+    RuntimeError when the call fails, same contract as before.
     """
-    try:
-        from agent.auxiliary_client import call_llm
-    except ImportError as e:
+    llm = getattr(_CTX["ctx"], "llm", None)
+    if llm is None:
         raise RuntimeError(ui(
-            "宿主 Hermes 没有官方辅助调用接口"
-            "（agent.auxiliary_client），请升级 Hermes 后重试",
-            "the host Hermes has no official auxiliary client (agent.auxiliary_client); "
-            "upgrade Hermes and retry")) from e
-    kwargs = dict(task=TASK, messages=[{"role": "user", "content": parts}],
-                  temperature=temperature, max_tokens=max_tokens, timeout=timeout)
-    rt = live_main_runtime()
-    if rt:
-        kwargs["main_runtime"] = rt
-    if reasoning_effort:
-        kwargs["extra_body"] = {"reasoning_effort": reasoning_effort}
-    err = None
-    resp = None
-    while True:
-        try:
-            resp = call_llm(**kwargs)
-            err = None
-            break
-        except Exception as e:  # noqa: BLE001 -- router raises provider-specific errors
-            err = e
-            # A strict cloud endpoint (or an older host without extra_body)
-            # may choke on the borrowed thinking-control key: drop it and
-            # give the call one clean retry.
-            if kwargs.pop("extra_body", None) is not None:
-                continue
-            break
-    if err is not None:
+            "宿主 LLM 入口未接线（ctx.llm 缺失）——请升级 Hermes 或重启网关后重试",
+            "the host LLM entry point is not wired (ctx.llm missing) — "
+            "upgrade Hermes or restart the gateway, then retry"))
+    task = SUMMARY_TASK if reasoning_effort == "none" else OBSERVE_TASK
+    messages = [{"role": "user", "content": list(parts)}]
+    try:
+        res = llm.complete(messages, temperature=temperature,
+                           max_tokens=max_tokens, timeout=timeout, task=task)
+    except Exception as err:  # noqa: BLE001 -- host raises provider errors; surface one line
         brief = f"{type(err).__name__}: {err}"[:300]
         raise RuntimeError(ui(f"语言模型调用失败：{brief}",
-                              f"LLM call failed: {brief}"))
-    if resp is None:
-        raise RuntimeError(ui(
-            "Hermes 还没有可用的语言模型"
-            "（本插件跟随会话模型；请先在 Hermes 配好模型再重试视频）",
-            "Hermes has no usable language model yet (this plugin follows your chat "
-            "model; configure one in Hermes, then retry the video)"))
-    return _content_of(resp), _finish_of(resp), _usage_of(resp)
+                              f"LLM call failed: {brief}")) from err
+    text = getattr(res, "text", None)
+    if text is None:
+        text = str(res or "")
+    usage_obj = getattr(res, "usage", None)
+    out_tok = int(getattr(usage_obj, "output_tokens", 0) or 0)
+    finish = "length" if out_tok and out_tok + 8 >= max_tokens else "stop"
+    return text, finish, {
+        "output_tokens": out_tok,
+        "model": str(getattr(res, "model", "") or ""),
+        "provider": str(getattr(res, "provider", "") or ""),
+    }
+
+
+def probe():
+    """Gate check: one tiny real call through the same slot the jobs use,
+    so probe green == job green. Reports the model and provider the host
+    actually routed to; on failure carries the host's own one-line reason
+    (e.g. connection refused against the currently selected engine)."""
+    if not llm_ready():
+        # One-shot field diagnostic: tells apart the ways wiring can fail
+        # (register never ran in THIS process / ctx without .llm).
+        _ctx = _CTX["ctx"]
+        try:
+            from agent.auxiliary_task_config import registered_tasks
+            _aux = "aux-ok" if "video_xray" in set(registered_tasks()) else "aux-missing"
+        except Exception as _e:
+            _aux = "aux-err:" + type(_e).__name__
+        _diag = (f" [diag pid={os.getpid()} ctx="
+                 f"{'none' if _ctx is None else 'no-llm-attr'} {_aux}]")
+        return {"ok": False, "model": "?", "provider": "?", "error": ui(
+            "宿主 LLM 入口未接线（ctx.llm 缺失）——请升级 Hermes 或重启网关后重试",
+            "the host LLM entry point is not wired (ctx.llm missing) — "
+            "upgrade Hermes or restart the gateway, then retry") + _diag}
+    try:
+        _t, _f, usage = chat([text_part("Reply with the single word OK.")],
+                             temperature=0.0, max_tokens=8, timeout=15.0)
+    except RuntimeError as err:
+        return {"ok": False, "model": "?", "provider": "?",
+                "error": str(err)[:300]}
+    return {"ok": True,
+            "model": usage.get("model") or "?",
+            "provider": usage.get("provider") or "?",
+            "error": ""}

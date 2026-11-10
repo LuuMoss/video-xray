@@ -21,7 +21,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+import os
 
 # One level up from dashboard/ is the plugin root; engine is a package under it
 _PLUGIN_ROOT = Path(__file__).resolve().parents[1]
@@ -191,38 +192,20 @@ def asr_audio_save(payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 
 @router.get("/llm/probe")
 def llm_probe() -> Dict[str, Any]:
-    """Read which model + endpoint the session resolves to RIGHT NOW, then
-    ping them alive — the panel gate calls this before starting any job
-    (owner 2026-11-09: a dead engine must fail at the gate, not five seconds
-    into a doomed job).
+    """Is the analysis LLM reachable? The panel gate calls this before
+    starting any job (owner 2026-11-09: a dead engine must fail at the
+    gate, not five seconds into a doomed job).
 
-    The ping shares the job's own path (official auxiliary router via
-    llm.chat), so probe green == job green. Model+base come from the
-    gateway's live runtime mirror -- the exact model the desktop panel is
-    using THIS second, even when config.yaml is still stale (panel model
-    switch does not rewrite config; 2026-11-09 incident). Only when the
-    mirror is empty (CLI) does it fall back to config.yaml. base/model are
-    returned on failure too, so the UI shows exactly WHICH model+address
-    was unreachable.
+    The ping is llm.probe(): one tiny call through the very task slot
+    real jobs use, via the host's official plugin LLM API -- same
+    routing, same credentials, so probe green == job green. The host
+    routes to the user's current chat model live, which is also what
+    retires the 2026-11-10 stale-port incident: there is no plugin-side
+    address left to go stale. model/provider report where the host
+    actually routed; on failure the host's own one-line reason comes
+    back so the UI shows what was unreachable.
     """
-    rt = llm.live_main_runtime()
-    if rt:
-        base = str(rt.get("base_url") or "").rstrip("/")
-        model = str(rt.get("model") or "")
-        source = "runtime"
-    else:
-        prov = llm.config_get("model", "provider") or ""
-        base = str(llm.config_get("model", "base_url")
-                   or (llm.config_get("providers", prov, "base_url") if prov else "") or "").rstrip("/")
-        model = str(llm.config_get("model", "default") or "")
-        source = "config"
-    try:
-        llm.chat([{"type": "text", "text": "ping"}], max_tokens=1, timeout=15)
-        return {"ok": True, "model": model or "?", "base": base or "?",
-                "source": source, "error": ""}
-    except Exception as e:  # RuntimeError from llm.chat with localized reason
-        return {"ok": False, "model": model or "?", "base": base or "?",
-                "source": source, "error": str(e)[:300]}
+    return llm.probe()
 
 
 @router.get("/asr/tracks")
@@ -238,6 +221,114 @@ def asr_audio_tracks(video: str = "") -> Dict[str, Any]:
 @router.get("/jobs")
 def list_jobs(limit: int = 30) -> Dict[str, Any]:
     return {"jobs": [_brief(r) for r in jobs.list_jobs(limit=limit)]}
+
+
+# --- Frame gallery -----------------------------------------------------
+# The engine keeps frames in memory only (zero-disk pipeline), so the
+# panel's "show me what was analysed" view re-samples on demand: every
+# observation note carries its true frame timestamps ("[  12s] ..."), so
+# asking ffmpeg for exactly those seconds reproduces what the model saw,
+# frame for frame, without any persisted artifacts.
+
+import re as _re
+
+_NOTE_TS = _re.compile(r"^(?:[-*]\s*)?\[\s*(\d+:\d+(?::\d+)?)(?:\s*[-~]\s*\d+:\d+(?::\d+)?)?\s*\]")
+
+
+def _mmss_to_s(t: str) -> float:
+    parts = [float(x) for x in t.split(":")]
+    s = 0.0
+    for x in parts:
+        s = s * 60 + x
+    return s
+
+
+def _gallery_extract(path: str, t_s: float):
+    """One JPEG re-extracted at *t_s* seconds, or None on any failure.
+
+    Same recipe as the sampler's 512px frames, so the gallery shows the
+    pixels the model actually saw. Fail-soft: a missing/renamed video or
+    a broken ffmpeg is a blank tile, never a 500.
+    """
+    try:
+        from engine import sampling
+        blob = sampling._run([sampling._ffmpeg(), "-v", "error",
+                              "-ss", f"{max(0.0, t_s):.2f}", "-i", path,
+                              "-vf", "scale=512:-2", "-frames:v", "1",
+                              "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"])
+    except Exception:
+        return None
+    if not blob or blob[:2] != bytes((0xFF, 0xD8)):
+        return None
+    return blob
+
+
+def _gallery_frames(rec: Dict[str, Any]):
+    """[(seg_index, [(t_s, label), ...]), ...] from the ledger notes.
+
+    Each note = one observation segment; every "- [mm:ss-mm:ss] text"
+    line is one observed frame. We take the window START as the frame's
+    capture time (what the model actually saw at that instant). Lines
+    without a timestamp bracket (prose, headers) are skipped.
+    """
+    out = []
+    for si, note in enumerate(rec.get("notes") or []):
+        frames = []
+        for ln in str(note).splitlines():
+            m = _NOTE_TS.match(ln.strip())
+            if m:
+                frames.append((_mmss_to_s(m.group(1)), ln.strip()))
+        if frames:
+            out.append((si, frames))
+    return frames and out or out
+
+
+@router.get("/jobs/gallery")
+def gallery(id: str = Query(...), seg: int = Query(-1),
+            frame: int = Query(-1)) -> Any:
+    """Frame gallery for a finished/running job (on-demand, zero-disk).
+
+    No seg → manifest {frames: [{seg, url, ts}]} — one url per observed
+    frame, timestamps read from the ledger notes (exact times the model
+    saw). seg+frame → that single frame re-sampled via ffmpeg at the
+    recorded second, served as image/jpeg. Frame ids are ledger indices,
+    so nothing here trusts a client-supplied path.
+    """
+    rec = _load_or_404(id.strip())
+    manifest = _gallery_frames(rec)
+    path = str((rec.get("params") or {}).get("path")
+               or rec.get("path") or "")
+    if seg < 0:
+        # Thumbnails inline: one rest round-trip paints the whole gallery.
+        import base64 as _b64
+        frames = []
+        for si, fl in manifest:
+            for fi, (ts, _l) in enumerate(fl):
+                blob = _gallery_extract(path, max(0.0, ts)) if path and os.path.isfile(path) else None
+                if not blob:
+                    continue
+                frames.append({"seg": si, "i": fi, "ts": round(ts, 1),
+                               "url": "/api/plugins/video-xray/jobs/gallery?id="
+                                      f"{id}&seg={si}&frame={fi}",
+                               "data_url": "data:image/jpeg;base64,"
+                                           + _b64.b64encode(blob).decode("ascii")})
+        return {"frames": frames}
+    hit = next((f for si, frames in manifest if si == seg
+                for fi, f in enumerate(frames) if fi == frame), None)
+    if hit is None:
+        raise HTTPException(status_code=404, detail=ui("帧不存在", "frame not found"))
+    if not path or not os.path.isfile(path):
+        raise HTTPException(status_code=404,
+                            detail=ui("视频文件已不在原位置", "video file no longer at its original path"))
+    t = max(0.0, hit[0])
+    blob = _gallery_extract(path, t)
+    if blob is None:
+        raise HTTPException(status_code=502, detail=ui(
+            "取帧失败（ffmpeg 无输出或视频损坏）",
+            "frame capture failed (empty or corrupt ffmpeg output)"))
+    import base64 as _b64
+    return {"data_url": "data:image/jpeg;base64," + _b64.b64encode(blob).decode("ascii"),
+            "ts": round(t, 1)}
 
 
 @router.get("/jobs/{job_id}")

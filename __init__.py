@@ -12,11 +12,13 @@ import sys
 
 log = logging.getLogger(__name__)
 
-try:                                   # in-package load (gateway) first; loose script fallback
-    from .engine import jobs, llm, pipeline
-except ImportError:                    # pragma: no cover
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from engine import jobs, llm, pipeline
+_PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+if _PKG_DIR not in sys.path:            # unified top-level 'engine' key so this
+    sys.path.insert(0, _PKG_DIR)        # module and the dashboard's api.py mount
+try:                                   # share ONE engine.llm instance — the ctx
+    from engine import jobs, llm, pipeline   # wiring done in register() is then
+except ImportError:                    # visible to the panel's /llm/probe route.
+    from .engine import jobs, llm, pipeline  # fallback if the host blocks sys.path
 
 ui = llm.ui
 
@@ -212,6 +214,12 @@ def _slash_command(raw_args: str) -> str:
 
 
 def register(ctx):
+    # Single LLM path: hand the ctx to the engine so every analysis call
+    # goes through the host's official plugin LLM API (ctx.llm.complete) --
+    # host-resolved provider/model, live routing, zero plugin-specific auth
+    # or port code. Must run before anything can fire an analysis.
+    llm.set_ctx(ctx)
+
     ctx.register_tool(name="video_xray", toolset="video_xray",
                       schema=SCHEMA_ANALYZE, handler=_handle_analyze,
                       description="video content analysis (segmented observation + speech transcription)",
@@ -223,20 +231,35 @@ def register(ctx):
         "video", handler=_slash_command,
         description="video analysis: /video <path> [preset] | list | status | cancel | resume",
         args_hint="<video>|list|status|cancel|resume")
-    # Official auxiliary-task registration: the analysis engine calls
-    # agent.auxiliary_client.call_llm(task="video_xray") and follows the
-    # main chat model by default; this row makes the task appear in the
-    # desktop auxiliary config panel, where a user can pin a dedicated
-    # provider/model for video work (auxiliary.video_xray.* in config.yaml).
-    # Hosts without this API are not fatal: call_llm routes an unknown task
-    # to the main model anyway.
+    # Official auxiliary-task registration: the engine calls
+    # ctx.llm.complete(task=...) with exactly these keys, and the host
+    # routes both to the main chat model by default. Registering makes the
+    # rows appear in the desktop auxiliary config panel, where a user can
+    # pin a dedicated provider/model per slot (auxiliary.<key>.* in
+    # config.yaml). The observe slot follows the main model (vision
+    # observation benefits from its thinking); the summary slot pins
+    # reasoning_effort "none" because report writing is text shuffling and
+    # on thinking engines a reasoning block silently eats max_tokens and
+    # clips the report -- strict cloud APIs that 400 on that wire control
+    # are handled host-side (the host strips the control and retries).
+    # Hosts without this API are not fatal: the call still routes to the
+    # main model.
     try:
         ctx.register_auxiliary_task(
             "video_xray",
-            display_name="Video analysis (video-xray)",
-            description="frame observation, note compression and the final report "
-                        "of the video-xray plugin; unset = follows the main chat model",
+            display_name="Video analysis — observation (video-xray)",
+            description="vision frame observation and H3 prompt reverse-"
+                        "engineering of the video-xray plugin; unset = "
+                        "follows the main chat model",
         )
-    except (AttributeError, TypeError) as e:
-        log.info("auxiliary task registration skipped (%s); call_llm still "
+        ctx.register_auxiliary_task(
+            "video_xray_summary",
+            display_name="Video analysis — report (video-xray)",
+            description="note compression and final report writing of the "
+                        "video-xray plugin; thinking off by default so the "
+                        "report never gets clipped mid-sentence",
+            defaults={"reasoning_effort": "none"},
+        )
+    except (AttributeError, TypeError, ValueError) as e:
+        log.info("auxiliary task registration skipped (%s); ctx.llm still "
                  "routes the task to the main model", e)

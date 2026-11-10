@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-11-11
+
+### Added
+- **Frame gallery inside the job detail view** — "Frames the model saw": every frame the engine actually sampled, laid out as a wrapped horizontal thumbnail strip with per-frame timestamps; click a frame for full view or copy its path. Frames are pulled from the source video with ffmpeg on demand and cached next to the job ledger (up to 64 per job).
+- **Pre-flight engine check** — starting an analysis now pings the LLM route first; a dead engine surfaces an actionable error instead of a silently queued job.
+
+### Fixed
+- **Panel could report "engine not ready" while analysis still worked** — the dashboard API was loaded as a second, context-less copy of the plugin, so the panel's probe never saw the wiring done at registration. Both halves now share one module instance.
+- **Stale engine endpoints after switching chat models** — follow-the-chat routing now reads the host's live runtime mirror, so dynamic-port runtimes retarget analysis immediately instead of reusing a dead port cached in config.
+- **Widgets rendering broken for some users** — Tailwind utility classes are only generated for selectors present in the host's compiled stylesheet, and a few classes this plugin used (notably the thumbnail height clamp) were silently dropped. Every class is now audited against the shipped CSS bundle, and sizing that cannot be guaranteed falls back to inline styles.
+- **The Whisper worker was referenced but never shipped** — `engine/whisper_worker.py` is now part of the package, so the middle rung of the transcription ladder works out of the box.
+
 ## [0.1.0] - 2026-11-10
 
 First public release.

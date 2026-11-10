@@ -171,6 +171,9 @@ After a job completes, the detail view exports the report (`.md`) and the revers
 ![Cloud ASR configuration](docs/screenshots/10-cloud-asr.png)
 *OpenAI-compatible endpoint + model + masked key, with real test buttons.*
 
+![Frames the model saw — thumbnail strip with per-frame timestamps](docs/screenshots/11-gallery-frames-strip.png)
+*Frame gallery (new in 0.2.0): every frame the engine sampled, timestamped, click for full view — an instant gut-check on sampling coverage.*
+
 ## Localization
 
 Wordbook lives in `desktop/plugin.js` (`MESSAGES`, two locales today: `zh` and `en`). The host automatically falls back to English for every other locale, so a single-file translation PR instantly makes the whole UI speak your language. Welcome aboard!

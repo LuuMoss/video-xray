@@ -152,7 +152,7 @@ const B = {
       copying: '反推中', copy_h3: '复制 H3', reveal: '打开文件夹', collapse: '收起',
       truncated: '⚠ 总结结尾被切断（预算在 engine/pipeline.py 的 _summary_budget）',
       error_prefix: '错误：{{0}}', no_summary_live: '（还没出总结）', no_summary: '（没有总结）',
-      lines_title: '台词（{{0}} 条）', notes_title: '逐段观察记录（{{0}} 段）',
+      lines_title: '台词（{{0}} 条）', notes_title: '逐段观察记录（{{0}} 段）', gallery_title: '模型看到的画面（{{0}} 帧）', gallery_loading: '放大帧加载中…',
       h3_missing: '没生成', h3_copied: 'H3 提示词已复制：{{0}}｜{{1}} 个镜头｜{{2}}',
       h3_failed: 'H3 反推失败：{{0}}',
       export_title: '导出分析结果（同目录会同时写一个同名的 _H3提示词.txt）',
@@ -168,7 +168,7 @@ const B = {
     },
     strip: {
       title: '视频分析工作台', brand: '雅澈引擎 · {{0}} 预设',
-      need_path: '先选视频文件（点「浏览…」）',
+      need_path: '先选视频文件（点「分析视频…」）',
       started: '视频分析已发起：{{0}}',
       running: '分析运行中',
       pick_title: '选择要分析的视频', filter_video: '视频',
@@ -221,11 +221,12 @@ const B = {
       params_need_video: '点不了：请先上传/选择要分析的视频文件',
       need_video_hint: '请先上传/选择要分析的视频（不必发送），其余参数随视频解锁',
       run_locked_engine: '点不动：转写引擎还没登记——在下方「本地引擎」选好目录点「保存」（圈变绿），或把转录选成「关闭」',
-      path_ro_tip: '路径只能通过「浏览…」选入（禁手工输入/粘贴，防打错、防串片）',
+      path_ro_tip: '路径只能通过「分析视频…」选入（禁手工输入/粘贴，防打错、防串片）',
       dlg_r2t2: 'R2T2 调参', dlg_whisper: 'Whisper 调参',
       dlg_desc_r2t2: '保存前会先真实加载这组参数做验证：机器上没有 CUDA 却选了 CUDA、Q4 模型文件还没下载，都会被拒绝并原样写出引擎的报错——加载得了才保存生效。',
       dlg_desc_whisper: '保存前同样真实加载验证：换 medium/large 第一次没缓存会联网下载（几十秒到几分钟）；CUDA 不可用会被拒绝。',
-      p_device: '转写设备', p_quant: '量化精度', p_size: '模型大小', p_lang: '识别语言',
+      p_device: '转写设备',
+    p_device_tip: '语音转字幕（转录）用哪个设备。它只管转录这一小步——通常只占整个分析的几秒；画面观察和最终总结由您的推理引擎自己决定用什么设备跑（就是常驻显存里的那个模型），不受此项控制。转录模型较小，CPU 与 GPU 的速度差异通常很小，选 CPU 还能给引擎省显存。', p_quant: '量化精度', p_size: '模型大小', p_lang: '识别语言',
       p_hot: '热词（提高专有名词命中）', p_hot_ph: '例：容器 微服务 Kubernetes（空格或逗号分隔）',
       p_hot_whisper: '初始提示（近似热词）', p_hot_tip_whisper: 'faster-whisper 没有真正的热词加权：这段文字作为初始提示，引导模型偏向这些词',
       p_track: '音轨', p_track_probe: '正在数这条视频的音轨…', p_track_probe_fail: '音轨探测失败——填 0 走默认音轨',
@@ -245,9 +246,9 @@ const B = {
       auto_send_tip: '点发送时，输入框里的视频附件自动按这套参数起分析作业（消息照发，不拦）',
       label_subs: '字幕 / 台词线索（粘贴后自动跳过转录）',
       ph_subs: '可粘贴 SRT/VTT/时标行（可选）',
-      ph_path: '视频文件绝对路径（或点右侧「浏览…」）',
-      browse: '浏览…', starting: '发起中…', analyze_now: '立即分析',
-      probe_dead: '语言模型未就绪：{{0}} 无响应（{{1}}）。先确认桌面端模型已加载完，再重试', probe_err: '引擎体检请求失败：{{0}}', probe_ok: '引擎就绪：{{0}} @ {{1}}', auto_skipped: '雅澈引擎未启动分析：{{0}}（消息照常发送）'
+      ph_path: '视频文件绝对路径（或点右侧「分析视频…」）',
+      browse: '分析视频…', starting: '发起中…', analyze_now: '立即分析',
+      probe_dead: '语言模型未就绪：{{0}} 无响应（{{1}}）。先确认桌面端模型已加载完，再重试', probe_err: '引擎体检请求失败：{{0}}', probe_ok: '引擎就绪：{{0}}（走 {{1}}）', auto_skipped: '雅澈引擎未启动分析：{{0}}（消息照常发送）'
     }
   } },
   en: { panel: {
@@ -295,7 +296,7 @@ const B = {
       copying: 'Generating…', copy_h3: 'Copy H3', reveal: 'Open folder', collapse: 'Collapse',
       truncated: '⚠ Summary was cut off at the end (budget: _summary_budget in engine/pipeline.py)',
       error_prefix: 'Error: {{0}}', no_summary_live: '(no summary yet)', no_summary: '(no summary)',
-      lines_title: 'Dialogue ({{0}} lines)', notes_title: 'Per-segment observation notes ({{0}} segments)',
+      lines_title: 'Dialogue ({{0}} lines)', notes_title: 'Per-segment observation notes ({{0}} segments)', gallery_title: 'Frames the model saw ({{0}})', gallery_loading: 'loading full frame…',
       h3_missing: 'no result', h3_copied: 'H3 prompt copied: {{0}} · {{1}} shots · {{2}}',
       h3_failed: 'H3 generation failed: {{0}}',
       export_title: 'Export analysis report (a matching _H3_prompt.txt is written in the same folder)',
@@ -311,7 +312,7 @@ const B = {
     },
     strip: {
       title: 'Video analysis workbench', brand: 'Yache engine · {{0}} presets',
-      need_path: 'Pick a video file first (use "Browse…")',
+      need_path: 'Pick a video file first (use "Analyze a video…")',
       started: 'Analysis started: {{0}}',
       running: 'Analysis running',
       pick_title: 'Choose a video to analyze', filter_video: 'Video',
@@ -364,11 +365,12 @@ const B = {
       params_need_video: 'Locked: attach the video file to analyse first',
       need_video_hint: 'Attach a video file first (no need to send) — the other controls unlock once one is attached',
       run_locked_engine: 'Locked: the transcription engine is not registered yet — pick its folder under "Local engines" and press Save (the dot turns green), or switch transcription to Off',
-      path_ro_tip: 'The path can only come from "Browse…" (typing/pasting is blocked — no typos, no mismatched files)',
+      path_ro_tip: 'The path can only come from "Analyze a video…" (typing/pasting is blocked — no typos, no mismatched files)',
       dlg_r2t2: 'R2T2 settings', dlg_whisper: 'Whisper settings',
       dlg_desc_r2t2: 'Saving first loads the engine for real with these settings: choosing CUDA without CUDA hardware, or Q4 before its model file is downloaded, is rejected with the engine error shown verbatim.',
       dlg_desc_whisper: 'Saving also loads for real: first-time medium/large downloads may take minutes; CUDA is refused when unavailable.',
-      p_device: 'Device', p_quant: 'Quantization', p_size: 'Model size', p_lang: 'Language',
+      p_device: 'Device',
+    p_device_tip: 'Which device runs the speech-to-text step. It only governs transcription — a few seconds of a whole analysis; frame observation and the final summary run wherever your inference engine itself runs (the model already resident in VRAM), independent of this setting. The transcription model is small, so CPU vs GPU usually makes little speed difference, and CPU also saves VRAM for the engine.', p_quant: 'Quantization', p_size: 'Model size', p_lang: 'Language',
       p_hot: 'Hotwords (bias proper nouns)', p_hot_ph: 'e.g. container microservice Kubernetes (space or comma separated)',
       p_hot_whisper: 'Initial prompt (hotword approximation)', p_hot_tip_whisper: 'faster-whisper has no true hotword biasing: this text seeds the model toward those words',
       p_track: 'Audio track', p_track_probe: 'Counting audio tracks…', p_track_probe_fail: 'Track probe failed — 0 uses the default track',
@@ -388,9 +390,9 @@ const B = {
       auto_send_tip: 'When you press send, video attachments in the input box start analysis with these settings (the message still sends)',
       label_subs: 'Subtitles / dialogue hints (paste to skip transcription)',
       ph_subs: 'Paste SRT/VTT/timestamped lines (optional)',
-      ph_path: 'Absolute video path (or use "Browse…" on the right)',
-      browse: 'Browse…', starting: 'Starting…', analyze_now: 'Analyze now',
-      probe_dead: 'LLM not ready: {{0}} is not answering ({{1}}). Load the model in the desktop app first, then retry', probe_err: 'Engine probe request failed: {{0}}', probe_ok: 'Engine ready: {{0}} @ {{1}}', auto_skipped: 'Yache engine did not start: {{0}} (message sent as usual)'
+      ph_path: 'Absolute video path (or use "Analyze a video…" on the right)',
+      browse: 'Analyze a video…', starting: 'Starting…', analyze_now: 'Analyze now',
+      probe_dead: 'LLM not ready: {{0}} is not answering ({{1}}). Load the model in the desktop app first, then retry', probe_err: 'Engine probe request failed: {{0}}', probe_ok: 'Engine ready: {{0}} (via {{1}})', auto_skipped: 'Yache engine did not start: {{0}} (message sent as usual)'
     }
   } }
 }
@@ -496,7 +498,7 @@ async function llmPreflight() {
   try {
     const r = await api.rest('/llm/probe', { timeoutMs: 15000 })
     if (r && r.ok) { LLM_LIVE = r; return null }
-    return t('panel.strip.probe_dead', String((r && (r.model || r.base)) || '?'),
+    return t('panel.strip.probe_dead', String((r && (r.model || r.provider)) || '?'),
              String((r && r.error) || ''))
   } catch (e) {
     return t('panel.strip.probe_err', friendly(e))
@@ -524,7 +526,7 @@ async function autoAnalyzeOnSend(draft) {
     const key = a.occurrenceId ?? a.id ?? a.path
     if (fired.has(key)) continue
     fired.add(key)
-    // 统一路径来源：镜像进工作台路径框（等价「浏览…」选片），参数弹窗跟着能探轨
+    // 统一路径来源：镜像进工作台路径框（等价「分析视频…」选片），参数弹窗跟着能探轨
     try { if (panel.setPath) panel.setPath(a.path) } catch (e) { /* 面板没挂载就算了 */ }
     try {
       // double-run guard: an active job already exists for the same path (resend, or a hot reload swapped the handler instance and cleared the
@@ -812,7 +814,7 @@ function ParamsDialog(props) {
         jsxs('div', { className: 'grid grid-cols-2 gap-2.5', children: [
           Sel(t('panel.strip.p_device'), dev, setDev,
             isR ? [['cpu', t('panel.strip.p_dev_cpu')], ['cuda', t('panel.strip.p_dev_cuda')]]
-                : [['auto', t('panel.strip.p_dev_auto')], ['cpu', t('panel.strip.p_dev_cpu')], ['cuda', t('panel.strip.p_dev_cuda')]]),
+                : [['auto', t('panel.strip.p_dev_auto')], ['cpu', t('panel.strip.p_dev_cpu')], ['cuda', t('panel.strip.p_dev_cuda')]], t('panel.strip.p_device_tip')),
           isR
             ? Sel(t('panel.strip.p_quant'), quant, setQuant, [['Q8_0', t('panel.strip.p_q8')], ['Q4_K_M', t('panel.strip.p_q4')]])
             : Sel(t('panel.strip.p_size'), size, setSize, [['tiny', t('panel.strip.p_s_tiny')], ['base', t('panel.strip.p_s_base')], ['small', t('panel.strip.p_s_small')], ['medium', t('panel.strip.p_s_medium')], ['large-v3', t('panel.strip.p_s_large')]]),
@@ -1192,6 +1194,51 @@ function LiveCard(props) {
 }
 
 /** design draft 7: job detail (summary + transcript timeline + per-segment notes + cancel/resume/open folder). */
+/** Gallery strip: the exact frames the model saw, re-extracted on demand.
+ *  Thumbnails ride the manifest request (one round-trip); a click fetches
+ *  the full-size frame through the same rest bridge. Fail-soft: no frames
+ *  or dead backend = the strip is simply absent, never an error wall. */
+function GalleryFrames(props) {
+  const [big, setBig] = useState(null)
+  const { data } = useQuery({
+    queryKey: ['video-xray', 'gallery', props.id],
+    queryFn: () => api.rest('/jobs/gallery?id=' + encodeURIComponent(props.id)),
+    enabled: !!props.id, staleTime: 60000
+  })
+  const frames = data && Array.isArray(data.frames) ? data.frames : []
+  const { data: full } = useQuery({
+    queryKey: ['video-xray', 'gallery-full', props.id, big && big.seg, big && big.i],
+    queryFn: () => api.rest('/jobs/gallery?id=' + encodeURIComponent(props.id)
+      + '&seg=' + big.seg + '&frame=' + big.i),
+    enabled: !!big
+  })
+  if (!frames.length) return null
+  return jsx('div', { className: 'flex flex-col gap-1', children: [
+    jsx(Separator, {}),
+    jsx('div', { className: 'text-[0.625rem] text-(--ui-accent)',
+      children: t('panel.detail.gallery_title', frames.length) }),
+    // The design says "strip": thumbs tile left-to-right and wrap, not one
+    // per row — a 32-frame job must be scannable in one screenful.
+    jsx('div', { className: 'flex flex-wrap items-start gap-1.5', children:
+      frames.map((f) => jsxs('button', {
+        className: 'flex max-w-fit items-center gap-1.5 rounded-md bg-(--ui-surface-background) p-1 pr-2 text-left hover:bg-(--ui-row-hover-background)',
+        onClick: () => setBig(big && big.i === f.i && big.seg === f.seg ? null : { seg: f.seg, i: f.i }),
+        children: [
+          f.data_url ? jsx('img', { src: f.data_url, alt: '',
+            className: 'h-12 w-auto rounded-sm' }) : null,
+          jsx('span', { className: 'font-mono text-[0.5625rem] text-(--ui-text-tertiary)',
+            children: String(f.ts) + 's' })
+        ]
+      }, f.seg + '-' + f.i)) }),
+    big ? (full && full.data_url
+      ? jsx('img', { src: full.data_url, alt: '', className: 'mt-1 w-full rounded-md' })
+      : jsx('div', { className: 'mt-1 text-[0.625rem] text-(--ui-text-tertiary)',
+          children: t('panel.detail.gallery_loading') }))
+      : null
+  ] })
+}
+
+
 function JobDetail(props) {
   const [busy, setBusy] = useState('')
   // persistent feedback right under the action buttons: {kind:'ok'|'bad', src:'export'|'h3', text, ms}
@@ -1348,7 +1395,8 @@ function JobDetail(props) {
                 size: 'sm',
                 variant: 'outline',
                 type: 'button',
-                className: 'min-w-[6rem] justify-center',
+                style: { minWidth: '6rem' },
+                className: 'justify-center',
                 disabled: busy !== '',
                 onClick: exportJob,
                 children: busy === 'export'
@@ -1363,7 +1411,8 @@ function JobDetail(props) {
                 size: 'sm',
                 variant: 'ghost',
                 type: 'button',
-                className: 'min-w-[6rem] justify-center',
+                style: { minWidth: '6rem' },
+                className: 'justify-center',
                 disabled: busy !== '',
                 onClick: copyH3,
                 children: busy === 'h3'
@@ -1470,7 +1519,8 @@ function JobDetail(props) {
                     )
                   ]
                 })
-              : null
+              : null,
+              done ? jsx(GalleryFrames, { id: j.id }) : null,
           ]
         })
       })
@@ -1658,7 +1708,7 @@ function Strip() {
     // 引擎体检：模型+端口活着才准发起作业（缺这一步 = 往死端口上撞大运）
     const pf = await llmPreflight()
     if (pf) { setErr(pf); setBusy(false); return }
-    host.notify({ kind: 'info', message: t('panel.strip.probe_ok', LLM_LIVE?.model ?? '?', LLM_LIVE?.base ?? '') })
+    host.notify({ kind: 'info', message: t('panel.strip.probe_ok', LLM_LIVE?.model ?? '?', LLM_LIVE?.provider ?? '') })
     try {
       const r = await api.rest('/analyze', { method: 'POST', body: b, timeoutMs: 20000 })
       saveForm(form)
@@ -1979,7 +2029,7 @@ function Strip() {
                     style: { gridColumn: '1 / -1' },
                 children: [
                   jsx(Input, {
-                    // 主人 2026-11-09 定：路径只走「浏览…」一道门——手工输入/粘贴全禁，
+                    // 主人 2026-11-09 定：路径只走「分析视频…」一道门——手工输入/粘贴全禁，
                     // 防打错字、防粘到不相干的旧路径引发分析报错
                     readOnly: true,
                     value: form.path,

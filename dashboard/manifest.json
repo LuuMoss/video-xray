@@ -1,6 +1,6 @@
 {
   "name": "video-xray",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "video-xray panel backend bridge: reads the file ledger and exposes job control endpoints under /api/plugins/video-xray/",
   "api": "api.py"
 }
