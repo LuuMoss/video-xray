@@ -174,6 +174,12 @@ After a job completes, the detail view exports the report (`.md`) and the revers
 ![Frames the model saw — thumbnail strip with per-frame timestamps](docs/screenshots/11-gallery-frames-strip.png)
 *Frame gallery (new in 0.2.0): every frame the engine sampled, timestamped, click for full view — an instant gut-check on sampling coverage.*
 
+Full-size frames pulled straight from the demo clip behind that strip (AI-generated with ComfyUI, so nothing here is private footage):
+
+![Wide shot of a rainy neon street](docs/screenshots/gallery-01-rainy-street-wide.png)
+![Close-up with neon bokeh](docs/screenshots/gallery-02-heroine-neon-bokeh.png)
+![Heroine smiling under an umbrella](docs/screenshots/gallery-03-heroine-smile.png)
+
 ## Localization
 
 Wordbook lives in `desktop/plugin.js` (`MESSAGES`, two locales today: `zh` and `en`). The host automatically falls back to English for every other locale, so a single-file translation PR instantly makes the whole UI speak your language. Welcome aboard!
