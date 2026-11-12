@@ -8,6 +8,7 @@ OR the <id>.cancel file (works across processes).
 import itertools
 import json
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -16,9 +17,34 @@ from . import llm, pipeline
 
 ui = llm.ui
 
-_HERMES_HOME = Path(os.environ.get(
-    "HERMES_HOME", str(Path(__file__).resolve().parents[3])))
-JOB_DIR = _HERMES_HOME / "xray-jobs"
+# HERMES_HOME through the official profile-aware resolver; the env
+# var (if set) wins for unit tests, ~/.hermes is the last fallback.
+try:
+    from hermes_constants import get_hermes_home as _get_hermes_home
+except Exception:                                        # pragma: no cover
+    def _get_hermes_home():
+        return Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser()
+
+# Plugin-owned state lives under <HERMES_HOME>/plugin-data/<plugin>/ --
+# the same convention plugins/plugin_storage.py hands official plugins.
+PLUGIN_DATA = _get_hermes_home() / "plugin-data" / "video-xray"
+
+# One ledger file per job: <plugin-data>/xray-jobs/<id>.json
+JOB_DIR = PLUGIN_DATA / "xray-jobs"
+
+
+def _migrate_legacy():
+    """One-shot move of the pre-plugin-data ledger (idempotent)."""
+    try:
+        legacy = _get_hermes_home() / "xray-jobs"
+        if legacy.is_dir() and not JOB_DIR.exists():
+            PLUGIN_DATA.mkdir(parents=True, exist_ok=True)
+            os.replace(str(legacy), str(JOB_DIR))
+    except OSError:
+        pass
+
+
+_migrate_legacy()
 _ACTIVE: dict = {}   # id -> {"stop": Event}
 
 
@@ -34,8 +60,21 @@ def _asr_param(val):
     return str(val or "auto")
 
 
+# Ids arriving over REST/CLI are user input: strict whitelist (the
+# official catalog _validate_name recipe) so nothing escapes JOB_DIR
+# via ../ or separators.
+_ID_RE = re.compile(r"[A-Za-z0-9._-]{1,128}")
+
+
+def _safe(job_id):
+    s = str(job_id)
+    if ".." in s or not _ID_RE.fullmatch(s):
+        raise ValueError("invalid job id: %r" % (job_id,))
+    return s
+
+
 def _file(job_id):
-    return JOB_DIR / f"{job_id}.json"
+    return JOB_DIR / f"{_safe(job_id)}.json"
 
 
 _tmp_seq = itertools.count()
@@ -221,6 +260,10 @@ def delete(job_id):
     Running jobs are blocked at the panel/command layer; this is the safety
     net underneath: refuse while active, so the ledger never disappears
     under a thread still calling _save()."""
+    try:
+        job_id = _safe(job_id)
+    except ValueError as exc:
+        return False, str(exc)
     if _ACTIVE.get(job_id) is not None:
         return False, ui("这条正在分析中，先取消再删",
                          "this job is still analyzing; cancel it first")
@@ -291,6 +334,10 @@ def clear_ended():
 def cancel(job_id):
     """Belt and braces: in-memory event + cancel file (a cross-process
     worker gets it too)."""
+    try:
+        job_id = _safe(job_id)
+    except ValueError:
+        return None
     a = _ACTIVE.get(job_id)
     if a:
         a["stop"].set()

@@ -3,6 +3,39 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.1] - 2026-11-12
+
+
+### Fixed
+
+- **ASR worker subprocesses no longer inherit the whole gateway environment** —
+  they picked up unrelated provider secrets (and the harness could hijack a
+  user venv's packages). Workers now receive a minimal, audited variable set
+  plus their own VA_* overrides.
+- **Cloud ASR key handling** — the silent `OPENAI_API_KEY` fallback is gone (it
+  shipped the LLM provider's key to whatever base_url a user configured). The
+  key now resolves from `VA_ASR_CLOUD_KEY`, the panel-saved registry, the
+  official secret store (`agent.secret_scope.get_secret`), or the explicitly
+  scoped `video-xray.asr.cloud.api_key` config entry, in that order.
+- **Job ids are validated before touching the filesystem** — strict
+  `[A-Za-z0-9._-]{1,128}` whitelist (rejecting `..`) on every ledger path
+  built from REST/CLI input, closing a path-traversal hole.
+- **All plugin state moved to `<HERMES_HOME>/plugin-data/video-xray/`** — job
+  ledger, R2T2/Whisper/cloud settings and the cloud key file (written 0600).
+  HERMES_HOME is resolved through `hermes_constants.get_hermes_home()`
+  (profile-aware) instead of `parents[3]` guesses; existing state migrates
+  automatically on first start.
+- **Dropped the private `registered_tasks` core import** — the dashboard probe no
+  longer reaches into host internals that may not exist upstream.
+- **Removed the unused `engine/whisper_worker.py`** — the transcription workers
+  that actually run are `engine/asr_worker.py` (Whisper/cloud) and the R2T2
+  runtime worker; the stale duplicate and its hf-mirror default are gone.
+
+### Changed
+
+- `provides_tools` in `plugin.yaml` is now a list of tool names instead of a count.
+
+
 ## [0.2.0] - 2026-11-11
 
 ### Added

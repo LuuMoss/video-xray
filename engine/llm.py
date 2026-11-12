@@ -54,9 +54,15 @@ def llm_ready():
     return getattr(_CTX["ctx"], "llm", None) is not None
 
 
-_HERMES_CFG = os.path.join(
-    os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes"),
-    "config.yaml")
+# Live config through the official profile-aware resolver (the same
+# file the desktop model switcher writes); env fallback for tests.
+try:
+    from hermes_constants import get_hermes_home as _get_hermes_home
+    _HERMES_CFG = os.path.join(str(_get_hermes_home()), "config.yaml")
+except Exception:                                        # pragma: no cover
+    _HERMES_CFG = os.path.join(
+        os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes"),
+        "config.yaml")
 
 _lang_cache = {"lang": None, "t": 0.0}
 _cfg_cache = {"lines": None, "t": 0.0}
@@ -190,11 +196,7 @@ def probe():
         # One-shot field diagnostic: tells apart the ways wiring can fail
         # (register never ran in THIS process / ctx without .llm).
         _ctx = _CTX["ctx"]
-        try:
-            from agent.auxiliary_task_config import registered_tasks
-            _aux = "aux-ok" if "video_xray" in set(registered_tasks()) else "aux-missing"
-        except Exception as _e:
-            _aux = "aux-err:" + type(_e).__name__
+        _aux = "ctx-llm" if _ctx is not None else "ctx-none"
         _diag = (f" [diag pid={os.getpid()} ctx="
                  f"{'none' if _ctx is None else 'no-llm-attr'} {_aux}]")
         return {"ok": False, "model": "?", "provider": "?", "error": ui(

@@ -57,8 +57,15 @@ ui = llm.ui
 # <HERMES_HOME>/plugins/video-xray/engine/, so three levels up is
 # HERMES_HOME and asr-r2t2 next to plugins/ is the engine root. Works on any
 # machine with zero configuration; set VA_R2T2_ROOT to point elsewhere.
-_HERMES_HOME = os.path.normpath(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), *[os.pardir] * 3))
+# HERMES_HOME through the official profile-aware resolver (the plugin
+# normally sits at <HERMES_HOME>/plugins/<name>/, but an install in
+# any other layout must not silently mis-resolve); the env var wins
+# for unit tests, ~/.hermes is the last fallback.
+try:
+    from hermes_constants import get_hermes_home as _get_hermes_home
+    _HERMES_HOME = str(_get_hermes_home())
+except Exception:                                        # pragma: no cover
+    _HERMES_HOME = os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes")
 # Default locations. The panel's "Load local engine" button registers
 # folders into asr-engines.json (see _load_state below), which beats these
 # defaults; VA_R2T2_ROOT/VA_ASR_PY/VA_ASR_WORKER env still win over the
@@ -74,7 +81,53 @@ _WORKER = os.environ.get("VA_ASR_WORKER", os.path.join(_ASR_ROOT, "worker.py"))
 _WHISPER_PY_FALLBACK = ""
 
 # Panel registrations persist here (survives restarts; config.yaml optional)
-_STATE = os.path.join(_HERMES_HOME, "asr-engines.json")
+# Plugin-owned settings (incl. the panel-saved cloud key) live under
+# <HERMES_HOME>/plugin-data/<plugin>/ and the file is chmod 0600.
+_DATA_DIR = os.environ.get(
+    "VA_DATA_DIR", os.path.join(_HERMES_HOME, "plugin-data", "video-xray"))
+try:
+    os.makedirs(_DATA_DIR, exist_ok=True)
+except OSError:                              # read-only home: session works
+    _DATA_DIR = _HERMES_HOME
+_STATE = os.path.join(_DATA_DIR, "asr-engines.json")
+
+
+def _migrate_legacy_state():
+    """One-shot move of the pre-plugin-data settings file (idempotent)."""
+    try:
+        legacy = os.path.join(_HERMES_HOME, "asr-engines.json")
+        if os.path.isfile(legacy) and not os.path.isfile(_STATE):
+            os.replace(legacy, _STATE)
+    except OSError:
+        pass
+
+
+_migrate_legacy_state()
+
+
+def _secret(name):
+    """Official secret store lookup (empty string when unavailable)."""
+    try:
+        from agent.secret_scope import get_secret
+        return str(get_secret(name, "") or "").strip()
+    except Exception:                                    # pragma: no cover
+        return ""
+
+
+# Worker subprocesses must NOT inherit the gateway environment: it
+# carries provider keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, ...) that
+# belong to the LLM side, not to a user-installed ASR venv. Hand over
+# only what a Python + ffmpeg child genuinely needs.
+_ENV_KEEP = {"PATH", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC",
+             "PATHEXT", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "APPDATA",
+             "LOCALAPPDATA", "TEMP", "TMP", "TMPDIR", "HOME", "LANG",
+             "LC_ALL", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"}
+
+
+def _worker_env(extra=None):
+    env = {k: v for k, v in os.environ.items() if k.upper() in _ENV_KEEP}
+    env.update(extra or {})
+    return env
 ENGINE = "auto"  # fallback engine choice when nobody configured one
 
 
@@ -101,7 +154,11 @@ def _save_state(st):
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(st, f, ensure_ascii=False, indent=1)
         os.replace(tmp, _STATE)
-    except OSError:  # read-only HERMES_HOME: the session still works
+        try:                   # the file holds the cloud key: owner-only
+            os.chmod(_STATE, 0o600)
+        except OSError:
+            pass
+    except OSError:  # read-only data dir: the session still works
         pass
 
 
@@ -417,10 +474,11 @@ def _run_worker(cmd, wav_bytes, timeout, cpu_pct, extra_env=None, cancel=None):
     the job's should_stop callable: a watcher thread polls it and force-
     kills the worker the moment the user cancels, so no analysis process
     lingers after cancel/error."""
-    # subprocess isolation: the gateway harness leaks its PYTHONPATH into
-    # children and hijacks package resolution -- strip it
-    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME")}
-    env.update(extra_env or {})
+    # subprocess isolation: minimal env (no provider keys ride along)
+    # and PYTHONPATH/PYTHONHOME stripped so the harness cannot hijack
+    # the user venv (see _worker_env).
+    env = _worker_env(dict(extra_env or {},
+                           PYTHONPATH="", PYTHONHOME=""))
     # Polite-cancel sentinel: unique path per run, NOT created yet -- the
     # watcher touches it when the user cancels and the worker's poll thread
     # sees it and exits itself (see asr-r2t2/worker.py), which lets the CUDA
@@ -580,9 +638,13 @@ def _cloud_cfg():
              or llm.config_get("video-xray", "asr", "cloud", "model") or "")
     if not base or not model:
         return None
+    # Never fall back to the LLM provider's global OPENAI_API_KEY: that
+# silently ships the key to whatever base_url a user pasted. Env var,
+# panel-saved registry (0600 under plugin-data), official secret store,
+# or the explicitly scoped config key -- in that order.
     key = (os.environ.get("VA_ASR_CLOUD_KEY", "").strip()
-           or os.environ.get("OPENAI_API_KEY", "").strip()
            or (reg and reg["key"])
+           or _secret("VA_ASR_CLOUD_KEY")
            or llm.config_get("video-xray", "asr", "cloud", "api_key") or "")
     return {"base": base.rstrip("/"), "model": model, "key": key}
 
@@ -680,11 +742,11 @@ def _missing_reason(eng):
                   "(or set video-xray.asr.whisper_python / VA_WHISPER_PY)")
     return ui("云端 ASR 未配置：在面板转录引擎区的「云端 ASR」填地址+密钥，点「测试连通」"
               "通过后按「保存」即可（老手也可在 config.yaml 填 video-xray.asr.cloud."
-              "base_url 和 .model，密钥放 .api_key 或环境变量 OPENAI_API_KEY）",
+              "base_url 和 .model，密钥放 .api_key 或环境变量 VA_ASR_CLOUD_KEY）",
               "cloud ASR is not configured: fill the URL + key in the panel's "
               "Cloud ASR row, press \"Test connection\" then \"Save\" (power users "
               "can also set video-xray.asr.cloud.base_url/.model in config.yaml, "
-              "key via .api_key or OPENAI_API_KEY)")
+              "key via .api_key or VA_ASR_CLOUD_KEY)")
 
 
 def _r2t2_transcribe(pcm_bytes, timeout, cpu_pct, cancel=None):
@@ -817,7 +879,7 @@ def _test_whisper(py):
     try:
         p = subprocess.run(
             [py, "-c", "import faster_whisper"], capture_output=True, timeout=60,
-            env={**os.environ, "PYTHONPATH": "", "PYTHONHOME": ""})
+            env=_worker_env({"PYTHONPATH": "", "PYTHONHOME": ""}))
     except Exception as e:  # noqa: BLE001 -- timeout/exec errors: one clean reason
         return False, ui(f"用 {py} 试跑失败：{e}", f"test-run with {py} failed: {e}")
     if p.returncode == 0:
