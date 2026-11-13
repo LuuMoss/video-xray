@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.2] - 2026-11-13
+
+### Fixed
+
+- **Cloud ASR key sources trimmed (catalog review, round 2)** — the duplicate raw
+  `os.environ.get("VA_ASR_CLOUD_KEY")` read is gone (`agent.secret_scope.get_secret`
+  already resolves that variable, profile-scoped), and the
+  `video-xray.asr.cloud.api_key` config.yaml fallback was removed: keys now live
+  only in the secret store (.env) or the panel-saved 0600 registry, so a shared
+  config file can never carry one. Panel hint text updated to match.
+- **Registry temp file created 0600** — `asr-engines.json.tmp` is now created via
+  `os.open(..., 0o600)` so a plaintext key is never world-readable between create
+  and chmod.
+
 ## [0.2.1] - 2026-11-12
 
 

@@ -151,7 +151,10 @@ def _load_state():
 def _save_state(st):
     try:
         tmp = _STATE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
+        # created 0600 from the outset: the plaintext key is never
+        # world-readable in the window between create and chmod
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(st, f, ensure_ascii=False, indent=1)
         os.replace(tmp, _STATE)
         try:                   # the file holds the cloud key: owner-only
@@ -626,9 +629,12 @@ def _registry_cloud_cfg():
 
 def _cloud_cfg():
     """OpenAI-compatible cloud ASR target, or None when not configured.
-    Priority: env > panel registry (测试连通 + 保存) > config.yaml, so a
-    panel save always wins over a stale yaml value -- and power users can
-    still pin with env vars without touching either file."""
+    base/model precedence: env > panel registry (测试连通 + 保存) >
+    config.yaml, so a panel save always wins over a stale yaml value -- and
+    power users can still pin with env vars without touching either file.
+    The key never comes from config.yaml: only the secret store (.env,
+    profile-scoped, resolved by get_secret) or the panel-saved 0600
+    registry."""
     reg = _registry_cloud_cfg()
     base = (os.environ.get("VA_ASR_CLOUD_BASE", "").strip()
             or (reg and reg["base"])
@@ -639,13 +645,13 @@ def _cloud_cfg():
     if not base or not model:
         return None
     # Never fall back to the LLM provider's global OPENAI_API_KEY: that
-# silently ships the key to whatever base_url a user pasted. Env var,
-# panel-saved registry (0600 under plugin-data), official secret store,
-# or the explicitly scoped config key -- in that order.
-    key = (os.environ.get("VA_ASR_CLOUD_KEY", "").strip()
-           or (reg and reg["key"])
-           or _secret("VA_ASR_CLOUD_KEY")
-           or llm.config_get("video-xray", "asr", "cloud", "api_key") or "")
+# silently ships the key to whatever base_url a user pasted. The key
+# lives in the official secret store (.env / profile-scoped env, which
+# get_secret resolves on its own) or the panel-saved registry (0600
+# under plugin-data) -- in that order. Never config.yaml: users paste
+# keys there and then share the file.
+    key = (_secret("VA_ASR_CLOUD_KEY")
+           or (reg and reg["key"]) or "")
     return {"base": base.rstrip("/"), "model": model, "key": key}
 
 
@@ -742,11 +748,11 @@ def _missing_reason(eng):
                   "(or set video-xray.asr.whisper_python / VA_WHISPER_PY)")
     return ui("云端 ASR 未配置：在面板转录引擎区的「云端 ASR」填地址+密钥，点「测试连通」"
               "通过后按「保存」即可（老手也可在 config.yaml 填 video-xray.asr.cloud."
-              "base_url 和 .model，密钥放 .api_key 或环境变量 VA_ASR_CLOUD_KEY）",
+              "base_url 和 .model，密钥只认环境变量 VA_ASR_CLOUD_KEY 或本面板保存的登记档）",
               "cloud ASR is not configured: fill the URL + key in the panel's "
               "Cloud ASR row, press \"Test connection\" then \"Save\" (power users "
               "can also set video-xray.asr.cloud.base_url/.model in config.yaml, "
-              "key via .api_key or VA_ASR_CLOUD_KEY)")
+              "key via VA_ASR_CLOUD_KEY or the panel-saved registry)")
 
 
 def _r2t2_transcribe(pcm_bytes, timeout, cpu_pct, cancel=None):
