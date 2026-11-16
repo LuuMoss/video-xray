@@ -41,15 +41,17 @@ def _env(key, default=""):
 
 def model_src():
     """Explicit path > local HF snapshot for the requested size > repo name
-    (online download fallback)."""
+    (online download fallback). VA_WHISPER_MODEL_DIR moves the HF hub root
+    (v0.3.0 weights picker); unset = today's ~/.cache/huggingface/hub."""
     src = _env("VA_ASR_MODEL")
     if src:
         return src
     size = _env("VA_ASR_MODEL_SIZE", "small").lower()
     if size not in SIZES:
         size = "small"
-    snap = (Path.home() / ".cache" / "huggingface" / "hub"
-            / f"models--Systran--faster-whisper-{size}" / "snapshots")
+    hub = _env("VA_WHISPER_MODEL_DIR").strip('"')
+    root = Path(hub) if hub else Path.home() / ".cache" / "huggingface" / "hub"
+    snap = (root / f"models--Systran--faster-whisper-{size}" / "snapshots")
     if snap.is_dir():
         for d in sorted(snap.iterdir()):
             if (d / "model.bin").is_file():

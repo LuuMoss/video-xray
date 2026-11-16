@@ -2,3 +2,12 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
+# Local release artifacts (GitHub Releases assets, not committed)
+release-assets/
+
+# local runtime logs
+logs/
+
+# release checksum manifests (published as release assets, not committed)
+SHA256SUMS-*.txt

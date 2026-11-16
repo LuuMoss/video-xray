@@ -185,12 +185,12 @@ const B = {
       label_start: '从第几秒开始', label_frames: '观察粒度',
       label_h3: 'H3 提示词形态（导出时用）', label_thresh: '镜头切换阈值（分段边界）',
       keep_progress: '保存分段进度（总是开）', auto_transcribe: '语音转录文字引擎（台词从哪来）',
-      load_engine: '选择本地语音转录文字模型目录', loading_engine: '识别目录中…',
+      load_engine: '选择本地语音转录文字引擎库目录', loading_engine: '识别目录中…',
       pick_dir: '选择本地转录引擎目录',
       pick_dir_tip: '选 R2T2 运行时根目录、或装了 faster-whisper 的 venv 根目录，然后按「保存」——后端会真实启动引擎、加载模型试转 0.2 秒静音，通过才登记（重启后依然有效）',
       cpu_title: '转录CPU上限',
       cloud_title: '云端ASR',
-      ph_pick_dir: '先点左边按钮选引擎目录（或直接粘路径），再按「保存」验证',
+      ph_pick_dir: '先点左边按钮选引擎目录（或直接粘路径），再按「保存」验证，适合用命令行手动安装了引擎库的用户',
       ph_url: '云端地址（如 https://api.openai.com）',
       ph_model: '模型（点「测试连通」后自动读取）',
       ph_key: 'API密钥（公开服务可留空）',
@@ -214,13 +214,16 @@ const B = {
       dlg_title: '云端 ASR 配置',
       dlg_desc: '接一个 OpenAI 兼容的语音转写服务（硅基流动 / 阿里百炼 / OpenRouter 等）：地址、模型、密钥填好，先测后存，全程不用碰 yaml。',
       back: '返回',
-      params_btn: '参数',
+      params_btn: '装载模型目录并设置参数',
       params_tip_r2t2: 'R2T2 调参：转写设备、量化精度、识别语言、热词、音轨、声道、字幕偏移——只有本机登记验证绿圈、且单选着 R2T2 时才可点',
       params_tip_whisper: 'Whisper 调参：模型大小、设备、识别语言、初始提示、音轨、声道、字幕偏移——只有本机登记验证绿圈、且单选着 Whisper 时才可点',
       params_locked: '点不了：这个引擎要么还没登记验证（圈没绿），要么当前选的不是它——先在下方「本地引擎」选目录保存登记，再单选它',
       params_need_video: '点不了：请先上传/选择要分析的视频文件',
       need_video_hint: '请先上传/选择要分析的视频（不必发送），其余参数随视频解锁',
       run_locked_engine: '点不动：转写引擎还没登记——在下方「本地引擎」选好目录点「保存」（圈变绿），或把转录选成「关闭」',
+      run_locked_busy: '有一个转写任务正在跑——先点「停止」再换引擎或改参数',
+      run_locked_mdir: '点不动：这个引擎的模型目录还没装载——点引擎行金色的「装载模型目录并设置参数」按钮，选好目录并按「保存」验证后这里才会亮',
+      run_locked_mdir_auto: '点不动：还没装载任何本地引擎的模型目录——点任一引擎行金色的「装载模型目录并设置参数」按钮，选好目录并按「保存」验证后这里才会亮（把转录选成「关闭」则不需要目录）',
       path_ro_tip: '路径只能通过「分析视频…」选入（禁手工输入/粘贴，防打错、防串片）',
       dlg_r2t2: 'R2T2 调参', dlg_whisper: 'Whisper 调参',
       dlg_desc_r2t2: '保存前会先真实加载这组参数做验证：机器上没有 CUDA 却选了 CUDA、Q4 模型文件还没下载，都会被拒绝并原样写出引擎的报错——加载得了才保存生效。',
@@ -248,7 +251,56 @@ const B = {
       ph_subs: '可粘贴 SRT/VTT/时标行（可选）',
       ph_path: '视频文件绝对路径（或点右侧「分析视频…」）',
       browse: '分析视频…', starting: '发起中…', analyze_now: '立即分析',
-      probe_dead: '语言模型未就绪：{{0}} 无响应（{{1}}）。先确认桌面端模型已加载完，再重试', probe_err: '引擎体检请求失败：{{0}}', probe_ok: '引擎就绪：{{0}}（走 {{1}}）', auto_skipped: '雅澈引擎未启动分析：{{0}}（消息照常发送）'
+      probe_dead: '语言模型未就绪：{{0}} 无响应（{{1}}）。先确认桌面端模型已加载完，再重试', probe_err: '引擎体检请求失败：{{0}}', probe_ok: '引擎就绪：{{0}}（走 {{1}}）', auto_skipped: '雅澈引擎未启动分析：{{0}}（消息照常发送）',
+      dl_open: '下载模型权重…', dl_open_tip: '官方源自动选最快线路（R2T2 约 2GB，VAD 自动同装；全程进度条，中断可续传）',
+      dl_idle: '还没装权重？点左边一键下载（零命令行）', dl_running: '下载中 {{0}}%', dl_paused: '下载中断了——点左边继续（会续传）',
+      dl_ready_r: '✅ R2T2 权重已就位——点上面「本地引擎装填…」选中该目录即可装载', dl_ready_w: '✅ Whisper 权重已就位，引擎列表会自动变绿',
+      dl_failed: '下载失败了：{{0}}',
+      dl_title: '下载模型权重', dl_note: '线路自动探测：ModelScope / hf-mirror / HuggingFace 直连，哪个快走哪个；官方仓库原文件，SHA256 验货后才算装好。',
+      dl_kind: '下载内容', dl_kind_r: 'R2T2 转录引擎（约 2GB，含 VAD 自动同装）', dl_kind_w: 'Whisper 权重（官方 Systran）',
+      dl_var: '精度档位', dl_q8: 'Q8_0 · 约 2GB · 推荐', dl_q4: 'Q4_K_M · 约 1.2GB', dl_wsize: '模型大小',
+      dl_w_tiny: 'tiny · 75MB · 最快', dl_w_base: 'base · 145MB', dl_w_small: 'small · 465MB · 推荐起步', dl_w_medium: 'medium · 1.5GB',
+      dl_dir: '下载目录', dl_browse: '浏览…', dl_free: '该盘剩余 {{0}} GB', dl_start: '开始下载',
+      inst_hint_r: '一键安装R2T2语音转录运行引擎库（N卡用户请下载并安装 CUDA 和 CPU 引擎库，非N卡用户只需下载并安装 CPU 引擎库）',
+      inst_hint_w: '一键安装Whisper语音转录运行引擎库（单包通吃 N卡 / CPU，装完自动登记为本地引擎）',
+      inst_cpu: '安装CPU引擎', inst_cuda: '安装CUDA引擎', inst_whisper: '安装Whisper引擎',
+      inst_cpu_tip: 'CPU 计算转录（任何电脑都能跑；R2T2 的基础包，CUDA 版也依赖它）',
+      inst_cuda_tip: 'GPU 加速转录（需 NVIDIA 显卡 + 较新驱动；无需安装 CUDA Toolkit；请先也安装 CPU 引擎库）',
+      inst_whisper_tip: 'faster-whisper 运行库（自带 Python 环境，任何电脑都能跑；装完自动登记为本地引擎，无需手动选目录）',
+      inst_reco: '你的显卡推荐装这个',
+      inst_running: '正在安装 {{0}} 引擎库… {{1}} {{2}}%',
+      inst_done: '{{0}} 引擎库安装完成',
+      inst_paused: '{{0}} 安装中断了——再点一次继续（下载会续传）',
+      inst_err: '{{0}} 引擎库安装失败：{{1}}',
+      inst_cancel: '停止', inst_cancel_tip: '停止本次安装（下载下次会续传）',
+      e_all_src: '所有源都不可用（{{0}}）',
+      e_no_net: '下载源全部连不上——检查网络/翻墙后重试（{{0}}）',
+      e_repo_missing: '官方仓库里找不到所需文件（{{0}}）',
+      e_files_busy: '文件被占用——关掉可能锁住该目录的程序（杀毒扫描、资源管理器）或把它加白名单，再重试',
+      e_files_missing: '下载包里缺少关键文件',
+      e_sha: '文件校验(SHA256)不符——包已损坏，取消后重新下载即可',
+      e_interrupted: '任务被网关重启打断——再点一次继续（下载会续传）',
+      e_cancelled: '任务已取消（已下部分会续传）',
+  log_open: '打开日志',
+  log_open_tip: '用系统默认程序打开插件目录里的运行日志（安装/下载/转录的完整故障轨迹都在这里）',
+  log_open_err: '打开日志失败：',
+      e_internal: '{{0}}',
+      r_busy: '已经有引擎安装在跑——先点「停止」或等它完成',
+      r_dl_busy: '已经有模型权重下载在跑——先停止或等它完成（下载与安装互斥）',
+      r_cuda_first: '请先安装 CPU 引擎库——CUDA 包只带 GPU 加速件，worker 和嵌入式 Python 都在 CPU 包里',
+      r_bad_variant: '未知引擎包类型（{{0}}）',
+      r_bad_kind: '下载内容或精度/尺寸不合法（{{0}}）',
+      r_no_target: '请先填写下载目录',
+      r_not_writable: '下载目录写不进去，换一个可写目录（{{0}}）',
+      inst_reg_ok: '已自动登记为本地转录引擎',
+      inst_reg_warn: '自动登记未完成：{{0}}——稍后可手动装载该目录',
+      dl_back: '返回', dl_starting: '准备中…', dl_cancel: '取消下载',
+      dl_speed: '{{0}} MB/s', dl_eta_min: '剩约 {{0}} 分', dl_eta_sec: '剩约 {{0}} 秒',
+      dl_after_r: '下一步：点上面「本地引擎装填…」→ 选中本目录 → 保存。首次加载解压编译约 1-2 分钟，别催。',
+      dl_after_w: 'Whisper 引擎会自动发现这个缓存，无需注册（引擎列表绿点自动亮）。',
+      p_mdir: '模型权重目录（可选，留空=插件默认）', p_mdir_browse: '浏览…',
+      p_mdir_ph_r: '如 …\\ComfyUI-Shared\\models（里面有 conf*.gguf）', p_mdir_ph_w: 'HF hub 缓存根（里面有 models--Systran--*）',
+      p_mdir_tip_r: '指向存放 R2T2 gguf 权重的 models 目录；VAD 会自动找同目录的 FireRedVAD-ONNX/ 子文件夹', p_mdir_tip_w: '存放 faster-whisper 快照模型的缓存根目录'
     }
   } },
   en: { panel: {
@@ -329,12 +381,12 @@ const B = {
       label_start: 'Start at second', label_frames: 'Observation granularity',
       label_h3: 'H3 prompt style (used on export)', label_thresh: 'Scene-cut threshold (segment bounds)',
       keep_progress: 'Keep segment progress (always on)', auto_transcribe: 'Speech-to-text engine (dialogue source)',
-      load_engine: 'Choose local speech-to-text model folder…', loading_engine: 'Checking folder…',
+      load_engine: 'Choose local speech-to-text engine runtime folder…', loading_engine: 'Checking folder…',
       pick_dir: 'Choose a local transcription engine folder',
       pick_dir_tip: 'Pick an R2T2 runtime root or a venv root that has faster-whisper installed, then press Save — the backend really boots that engine, loads its model and transcribes 0.2 s of silence; only a pass registers it (survives restarts)',
       cpu_title: 'Transcription CPU cap',
       cloud_title: 'Cloud ASR',
-      ph_pick_dir: 'Pick an engine folder with the button (or paste a path), then press Save to verify',
+      ph_pick_dir: 'Pick an engine folder with the button (or paste a path), then press Save to verify — handy if you installed the engine runtime manually from the command line',
       ph_url: 'Cloud URL (e.g. https://api.openai.com)',
       ph_model: 'Model (auto-filled after Connect test)',
       ph_key: 'API key (empty for open endpoints)',
@@ -358,13 +410,16 @@ const B = {
       dlg_title: 'Cloud ASR Setup',
       dlg_desc: 'Point at any OpenAI-compatible speech-to-text service (SiliconFlow / DashScope / OpenRouter ...): fill URL, model and key, test first, then save — no yaml required.',
       back: 'Back',
-      params_btn: 'Params',
+      params_btn: 'Load model folder & settings',
       params_tip_r2t2: 'R2T2 tuning: device, quantization, language, hotwords, audio track, channel, subtitle offset — clickable only while R2T2 is verified green AND selected',
       params_tip_whisper: 'Whisper tuning: model size, device, language, initial prompt, audio track, channel, subtitle offset — clickable only while Whisper is verified green AND selected',
       params_locked: 'Locked: this engine is not verified green yet (or another engine is selected) — register it below first, then select it',
       params_need_video: 'Locked: attach the video file to analyse first',
       need_video_hint: 'Attach a video file first (no need to send) — the other controls unlock once one is attached',
+      run_locked_busy: 'a transcription job is running — stop it first to change engines or settings',
       run_locked_engine: 'Locked: the transcription engine is not registered yet — pick its folder under "Local engines" and press Save (the dot turns green), or switch transcription to Off',
+      run_locked_mdir: 'Locked: this engine\'s model folder is not loaded yet — click the gold "Load model folder & settings" button on the engine row, pick the folder and press Save; this button lights up once it verifies',
+      run_locked_mdir_auto: 'Locked: no local engine model folder is loaded yet — click the gold "Load model folder & settings" button on any engine row, pick the folder and press Save; or switch transcription to Off which needs no folder',
       path_ro_tip: 'The path can only come from "Analyze a video…" (typing/pasting is blocked — no typos, no mismatched files)',
       dlg_r2t2: 'R2T2 settings', dlg_whisper: 'Whisper settings',
       dlg_desc_r2t2: 'Saving first loads the engine for real with these settings: choosing CUDA without CUDA hardware, or Q4 before its model file is downloaded, is rejected with the engine error shown verbatim.',
@@ -392,7 +447,56 @@ const B = {
       ph_subs: 'Paste SRT/VTT/timestamped lines (optional)',
       ph_path: 'Absolute video path (or use "Analyze a video…" on the right)',
       browse: 'Analyze a video…', starting: 'Starting…', analyze_now: 'Analyze now',
-      probe_dead: 'LLM not ready: {{0}} is not answering ({{1}}). Load the model in the desktop app first, then retry', probe_err: 'Engine probe request failed: {{0}}', probe_ok: 'Engine ready: {{0}} (via {{1}})', auto_skipped: 'Yache engine did not start: {{0}} (message sent as usual)'
+      probe_dead: 'LLM not ready: {{0}} is not answering ({{1}}). Load the model in the desktop app first, then retry', probe_err: 'Engine probe request failed: {{0}}', probe_ok: 'Engine ready: {{0}} (via {{1}})', auto_skipped: 'Yache engine did not start: {{0}} (message sent as usual)',
+      dl_open: 'Download weights…', dl_open_tip: 'Official sources, fastest line auto-picked (R2T2 ≈2GB, VAD included; progress bar all the way, resumable)',
+      dl_idle: 'No weights yet? one-click download (zero command line)', dl_running: 'downloading {{0}}%', dl_paused: 'download interrupted — click left to resume',
+      dl_ready_r: '✅ R2T2 weights in place — use "Load local engine" above, pick that folder', dl_ready_w: '✅ Whisper weights in place — the engine list turns green on its own',
+      dl_failed: 'download failed: {{0}}',
+      dl_title: 'Download model weights', dl_note: 'Lines auto-probed: ModelScope / hf-mirror / direct HuggingFace — whichever is fastest wins; official repos, every file SHA256-verified before it counts.',
+      dl_kind: 'What', dl_kind_r: 'R2T2 engine (≈2GB, VAD included)', dl_kind_w: 'Whisper weights (official Systran)',
+      dl_var: 'Quant', dl_q8: 'Q8_0 · ≈2GB · recommended', dl_q4: 'Q4_K_M · ≈1.2GB', dl_wsize: 'Model size',
+      dl_w_tiny: 'tiny · 75MB · fastest', dl_w_base: 'base · 145MB', dl_w_small: 'small · 465MB · good start', dl_w_medium: 'medium · 1.5GB',
+      dl_dir: 'Target folder', dl_browse: 'Browse…', dl_free: '{{0}} GB free on that drive', dl_start: 'Start download',
+      inst_hint_r: 'One-click install the R2T2 speech-transcription runtime — NVIDIA users: install CUDA + CPU packs; everyone else: CPU pack only',
+      inst_hint_w: 'One-click install the Whisper speech-transcription runtime (one pack covers NVIDIA and CPU alike; auto-registers when done)',
+      inst_cpu: 'Install CPU engine', inst_cuda: 'Install CUDA engine', inst_whisper: 'Install Whisper engine',
+      inst_cpu_tip: 'CPU transcription (works on any PC; the base pack for R2T2, CUDA builds on it)',
+      inst_cuda_tip: 'GPU-accelerated transcription (needs an NVIDIA GPU + recent driver; no CUDA Toolkit install needed; install the CPU pack too first)',
+      inst_whisper_tip: 'faster-whisper runtime (bundled Python; works on any PC; auto-registers as a local engine, no manual folder picking)',
+      inst_reco: 'recommended for your GPU',
+      inst_running: 'installing {{0}} runtime… {{1}} {{2}}%',
+      inst_done: '{{0}} runtime installed',
+      inst_paused: '{{0}} install interrupted — click again to resume (downloads continue)',
+      inst_err: '{{0}} runtime install failed: {{1}}',
+      inst_cancel: 'Stop', inst_cancel_tip: 'stop this install (downloads resume next time)',
+      e_all_src: 'every source is unavailable ({{0}})',
+      e_no_net: 'no download source reachable — check your network/proxy and retry ({{0}})',
+      e_repo_missing: 'the official repo is missing the required file(s) ({{0}})',
+      e_files_busy: 'files are locked — close whatever holds that folder (antivirus scan, open Explorer window) or allow-list it, then retry',
+      e_files_missing: 'the download pack is missing key files',
+      e_sha: 'SHA256 checksum mismatch — the file is corrupt; cancel and download it again',
+      e_interrupted: 'a gateway restart interrupted the task — click again to resume (downloads pick up where they stopped)',
+      e_cancelled: 'cancelled (partial bytes will resume later)',
+  log_open: 'Open log',
+  log_open_tip: 'Open the log file inside the plugin directory with the system viewer (full traces of installs, downloads, transcriptions live here)',
+  log_open_err: 'Could not open the log: ',
+      e_internal: '{{0}}',
+      r_busy: 'an engine install is already running — stop it or wait',
+      r_dl_busy: 'a weights download is running — stop it first (downloads and installs are mutually exclusive)',
+      r_cuda_first: 'install the CPU engine pack first — the CUDA pack only carries GPU files; the worker and embedded python live in the CPU pack',
+      r_bad_variant: 'unknown engine pack ({{0}})',
+      r_bad_kind: 'invalid download kind/size ({{0}})',
+      r_no_target: 'fill in the target directory first',
+      r_not_writable: 'that directory is not writable, pick another one ({{0}})',
+      inst_reg_ok: 'auto-registered as the local engine',
+      inst_reg_warn: 'auto-registration incomplete: {{0}} — register the folder manually later',
+      dl_back: 'Close', dl_starting: 'warming up…', dl_cancel: 'Cancel',
+      dl_speed: '{{0}} MB/s', dl_eta_min: '~{{0}} min left', dl_eta_sec: '~{{0}} s left',
+      dl_after_r: 'Next: "Load local engine" above → pick this folder → save. First load unpacks/compiles, 1–2 minutes.',
+      dl_after_w: 'The whisper engine discovers this cache automatically — no registration needed.',
+      p_mdir: 'Weights folder (optional, empty = plugin default)', p_mdir_browse: 'Browse…',
+      p_mdir_ph_r: 'e.g. …\\ComfyUI-Shared\\models (holds conf*.gguf)', p_mdir_ph_w: 'HF hub cache root (holds models--Systran--*)',
+      p_mdir_tip_r: 'A models folder holding the R2T2 ggufs; VAD is auto-found in its FireRedVAD-ONNX/ subfolder', p_mdir_tip_w: 'Cache root holding the faster-whisper snapshots'
     }
   } }
 }
@@ -569,6 +673,44 @@ function friendly(e) {
   return String(e?.message ?? e).replace(/^HTTP \d+:\s*/, '').slice(0, 200)
 }
 
+// 引擎层错误 = 稳定 code + 英文细节(11-17 铁律:异常不许自带 UI 语种——措辞在
+// 抛出瞬间烧死,正是英文界面漏出"所有下载源都失败"中文的根因)。这里按当前界面
+// 语言查表翻译;旧状态文件没 code 时按短语兜底翻译。
+const BE_CODE = {
+  all_sources_failed: 'e_all_src', no_source_reachable: 'e_no_net',
+  repo_missing_file: 'e_repo_missing', repo_missing_files: 'e_repo_missing',
+  sha_mismatch: 'e_sha', files_busy: 'e_files_busy',
+  files_missing: 'e_files_missing', interrupted_restart: 'e_interrupted',
+  cancelled: 'e_cancelled', internal_error: 'e_internal',
+}
+const BR_CODE = {
+  busy: 'r_busy', dl_busy: 'r_dl_busy', cuda_first: 'r_cuda_first',
+  bad_variant: 'r_bad_variant', bad_kind: 'r_bad_kind',
+  no_target: 'r_no_target', not_writable: 'r_not_writable',
+}
+const tidy = (s) => String(s).replace('（）', '').replace('()')
+function _beCore(st) {
+  const r = String((st && st.error) || '').slice(0, 200)
+  const k = BE_CODE[st && st.error_code]
+  if (k === 'e_internal') return r.slice(0, 160)
+  if (k) return tidy(t('panel.strip.' + k, String((st && st.error_detail) || '').slice(0, 120)))
+  const m = r.match(/(?:所有下载源都失败|every source failed)[：:\s]*(.{0,120})/i)
+  if (m) return t('panel.strip.e_all_src', m[1])
+  if (/所有下载源都连不上|every source unreachable|no download source reachable/.test(r)) return t('panel.strip.e_no_net', '')
+  if (/网关重启打断|gateway restart/.test(r)) return t('panel.strip.e_interrupted', '')
+  if (/缺少关键文件|missing key files|files missing/.test(r)) return t('panel.strip.e_files_missing')
+  if (/文件被占用|files are busy|ConnectionReset|Connection aborted|远程主机强迫关闭|WinError 10054/.test(r)) return t('panel.strip.e_files_busy', '')
+  if (/取消|cancel/i.test(r)) return t('panel.strip.e_cancelled')
+  return r.slice(0, 160)
+}
+function beText(st) { return _beCore(st) }
+function brText(r) {
+  const k = r && r.reason_code ? BR_CODE[r.reason_code] : ''
+  if (k) return tidy(t('panel.strip.' + k, String(r.reason_detail || '').slice(0, 120)))
+  return friendly((r && r.reason) || 'refused')
+}
+
+
 function baseName(p) {
   return String(p || '').split(/[\\/]/).pop() || '?'
 }
@@ -681,11 +823,14 @@ function AsrRadios(props) {
           }),
           tunable ? jsx(Button, {
             size: 'xs',
-            variant: 'ghost',
+            variant: 'outline',
             type: 'button',
             disabled: vd || !cfgOn,
             title: vd ? t('panel.strip.params_need_video') : cfgOn ? t('panel.strip.params_tip_' + e) : t('panel.strip.params_locked'),
             className: 'ml-auto h-5 shrink-0 px-1.5 text-[0.6875rem]',
+            // 主人 UI 审美定色：amber-400 金黄常驻（11-17 令：灰态也要金黄+有边框），
+            // 禁用感靠组件自身 opacity 表达，不再靠褪色
+            style: { color: '#fbbf24', borderColor: 'rgba(251,191,36,.55)' },
             onClick: ev => { ev.preventDefault(); ev.stopPropagation(); if (cfgOn) setDlg(e) },
             onMouseDown: ev => ev.stopPropagation(),
             children: t('panel.strip.params_btn')
@@ -725,6 +870,22 @@ function ParamsDialog(props) {
   // CPU 上限%：从前挂在外面行3，主人 2026-11-09 定挪进来，跟随设备=CPU 才出现
   const [cap, setCap] = useState(String(settings && settings.cpu_percent != null ? settings.cpu_percent : 50))
   const [nTracks, setNTracks] = useState(null) // null=探测中 -1=失败 N=条数
+  // v0.3.0 R3: 权重目录浏览——复用面板同一条后端目录选择通道（同源同权限）
+  async function browseMdir() {
+    if (pBusy !== '') return
+    setPBusy('dir')
+    try {
+      const d = await api.os.pickOpenPath({
+        title: t('panel.strip.dl_dir'), directories: true
+      })
+      const p = typeof d === 'string' ? d : (d && d.path) || null
+      if (p) setMdir(p)
+    } catch { /* 用户按取消，啥也不动 */ }
+    setPBusy('')
+  }
+  // v0.3.0 R3: 权重目录直填——主人本机可指 ComfyUI 现成权重免下载，普通
+  // 用户留空走插件内置目录；下载向导下完也只把这格指过去
+  const [mdir, setMdir] = useState(sp.model_dir || '')
   const [pBusy, setPBusy] = useState('')
   const [pMsg, setPMsg] = useState(null)
   // 路径框里这条视频有几条音轨？换视频即重数——3 条轨的专业样本点亮
@@ -739,8 +900,8 @@ function ParamsDialog(props) {
     return () => { dead = true }
   }, [videoPath])
   const draftParams = () => isR
-    ? { device: dev, quantization: quant, language: lang, hotwords: hot }
-    : { model_size: size, device: dev, language: lang, hotwords: hot }
+    ? { device: dev, quantization: quant, language: lang, hotwords: hot, model_dir: mdir.trim() || ((settings && settings.options && settings.options.r2t2_model_dir_default) || '') }
+    : { model_size: size, device: dev, language: lang, hotwords: hot, model_dir: mdir.trim() || ((settings && settings.options && settings.options.whisper_model_dir_default) || '') }
   const audioBody = () => ({ stream: Number(track) || 0, channel: Number(chan) || 0, offset: Number(offv) || 0 })
   async function testParams() {
     if (pBusy !== '') return
@@ -829,6 +990,26 @@ function ParamsDialog(props) {
           })
         ] }),
         jsx(Labeled, {
+          label: t('panel.strip.p_mdir'),
+          child: jsxs('div', {
+            className: 'flex min-w-0 items-center gap-1.5',
+            children: [
+              jsx(Input, {
+                value: mdir, onChange: e => setMdir(e.target.value),
+                placeholder: isR ? t('panel.strip.p_mdir_ph_r') : t('panel.strip.p_mdir_ph_w'),
+                className: 'h-8 min-w-0 flex-1 text-[0.8rem]',
+                title: isR ? t('panel.strip.p_mdir_tip_r') : t('panel.strip.p_mdir_tip_w')
+              }),
+              jsx(Button, {
+                size: 'sm', variant: 'outline', type: 'button',
+                disabled: pBusy !== '', onClick: browseMdir,
+                className: 'shrink-0 whitespace-nowrap',
+                children: t('panel.strip.p_mdir_browse')
+              })
+            ]
+          })
+        }),
+        jsx(Labeled, {
           label: isR ? t('panel.strip.p_hot') : t('panel.strip.p_hot_whisper'),
           child: jsx(Input, {
             value: hot,
@@ -905,6 +1086,80 @@ function AsrFooter(props) {
   // 2026-11-09 主人指定：云端一行塞三个输入框挤成小方块还溢出屏幕，改成
   // 「云端语音自定义…」按钮开配置框（框里 测试连通/保存/返回 三键）。
   const [cloudOpen, setCloudOpen] = useState(false)
+  // v0.3.0 下载向导：按钮常驻一行不变灰（下载权重没有任何前置依赖）；
+  // 下载进行中才 2.5s 快轮询，平时 30s 一次轻扫。['video-xray','dl'] 缓存
+  // 与 DownloadDialog 共用，TanStack 自动去重只发一份请求。
+  const [dlOpen, setDlOpen] = useState(false)
+  const { data: dl } = useQuery({
+    queryKey: ['video-xray', 'dl'],
+    queryFn: () => api.rest('/asr/download/status', { timeoutMs: 5000 }),
+    refetchInterval: (q) => (q.state.data && q.state.data.state === 'running' ? 2500 : 30000),
+  })
+  const dS = dl && dl.state
+  const dlLine = dS === 'running'
+    ? { color: '#fbbf24', text: t('panel.strip.dl_running', String(dl.percent ?? 0)) }
+    : dS === 'done'
+      ? { color: 'var(--ui-green)', text: dl.kind === 'whisper' ? t('panel.strip.dl_ready_w') : t('panel.strip.dl_ready_r') }
+      : dS === 'interrupted'
+        ? { color: '#fbbf24', text: t('panel.strip.dl_paused') }
+        : dS === 'error'
+          ? { color: 'var(--ui-red)', text: t('panel.strip.dl_failed', beText(dl)) }
+          : { color: 'var(--ui-text-secondary)', text: t('panel.strip.dl_idle') }
+  // v0.3.0 R4 一键安装运行引擎库（主人 11-16 定：三按钮手动选，不搞自动
+  // 探测；下载/解包/删包全在后端一条锁后串行，前端只管发起+看进度）。
+  // state 文件跨网关重启（running 掉电= interrupted），running 时 2.5s 快轮询。
+  const [iBusy, setIBusy] = useState(false)
+  const { data: inst } = useQuery({
+    queryKey: ['video-xray', 'installs'],
+    queryFn: () => api.rest('/installs/status', { timeoutMs: 5000 }),
+    refetchInterval: (q) => (q.state.data && q.state.data.task && q.state.data.task.state === 'running' ? 2500 : 30000),
+  })
+  const iS = inst && inst.task
+  const installing = iS && iS.state === 'running'
+  const INST_NAME = { cpu: 'CPU', cuda: 'CUDA', whisper: 'Whisper' }
+  const GOLD = { color: '#fbbf24', borderColor: 'rgba(251,191,36,.55)', boxShadow: '0 0 0 1px rgba(251,191,36,.3)' }
+  const instLine = !iS || iS.state === 'idle' ? null
+    : iS.state === 'running'
+      ? { color: '#fbbf24', text: t('panel.strip.inst_running', INST_NAME[iS.variant] || iS.variant || '', String(iS.phase || ''), String(iS.percent ?? 0)) }
+      : iS.state === 'done'
+        ? { color: 'var(--ui-green)', text: t('panel.strip.inst_done', INST_NAME[iS.variant] || '') + (iS.detail_code === 'registered'
+            ? ' · ' + t('panel.strip.inst_reg_ok')
+            : iS.detail_code === 'reg_incomplete'
+              ? ' · ' + t('panel.strip.inst_reg_warn', String(iS.reg_reason || '').slice(0, 120))
+              : iS.detail ? ' · ' + String(iS.detail).slice(0, 160) : '') }
+        : (iS.state === 'interrupted' || iS.state === 'cancelled')
+          ? { color: '#fbbf24', text: t('panel.strip.inst_paused', INST_NAME[iS.variant] || '') }
+          : { color: 'var(--ui-red)', text: t('panel.strip.inst_err', INST_NAME[iS.variant] || '', beText(iS)) }
+  useEffect(() => {
+    // whisper 装完会自动登记本地引擎——done 立刻刷 health，绿点当场变色
+    if (iS && iS.state === 'done') queryClient.invalidateQueries({ queryKey: ['video-xray', 'health'] })
+  }, [iS && iS.state])
+  async function startInstall(variant) {
+    if (busy || iBusy || installing) return
+    setIBusy(true)
+    setMsg(null)
+    try {
+      // 后端秒回开工回执，真正的下载/解包在网关后台线程（大包要几分钟）
+      const r = await api.rest('/installs/start', { method: 'POST', body: { variant }, timeoutMs: 20000 })
+      if (r && r.ok === false) setMsg({ ok: false, text: brText(r) })
+    } catch (e) {
+      setMsg({ ok: false, text: friendly(e) })
+    }
+    queryClient.invalidateQueries({ queryKey: ['video-xray', 'installs'] })
+    setIBusy(false)
+  }
+  async function cancelInstall() {
+    try {
+      await api.rest('/installs/cancel', { method: 'POST', body: {}, timeoutMs: 8000 })
+    } catch { /* 取消失败多半是线程已收尾，交给轮询定夺 */ }
+    queryClient.invalidateQueries({ queryKey: ['video-xray', 'installs'] })
+  }
+  useEffect(() => {
+    if (!dlOpen) return
+    const onKey = (ev) => { if (ev.key === 'Escape') setDlOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [dlOpen])
   useEffect(() => {
     if (!cloudOpen) return
     const onKey = (ev) => { if (ev.key === 'Escape') closeCloud() }
@@ -1014,6 +1269,98 @@ function AsrFooter(props) {
           })
         ]
       }),
+      // 行1.4：v0.3.0 R4 一键安装运行引擎库（主人 11-16 定稿双按钮手动选，
+      // 语义直白防歧义）。金色描边 = 后端 nvidia-smi 探测出的推荐项（纯提示
+      // 不代按）。全局安装锁让「装引擎」与「下权重」永远排队互不干涉。
+      jsx('div', {
+        className: 'flex min-w-0 flex-wrap items-center gap-1.5',
+        children: [
+          jsx('span', {
+            className: 'w-full break-words text-[0.6875rem] leading-snug',
+            style: { color: '#fbbf24' },
+            children: t('panel.strip.inst_hint_r')
+          }),
+          jsx(Button, {
+            size: 'xs', variant: 'outline', type: 'button',
+            disabled: busy || iBusy || installing,
+            title: t('panel.strip.inst_cpu_tip') + (inst && inst.gpu === false ? ' · ' + t('panel.strip.inst_reco') : ''),
+            className: 'shrink-0 whitespace-nowrap',
+            style: inst && inst.gpu === false ? GOLD : undefined,
+            onClick: () => startInstall('cpu'),
+            children: t('panel.strip.inst_cpu') + (inst && inst.installed && inst.installed.cpu ? ' ✓' : '')
+          }),
+          jsx(Button, {
+            size: 'xs', variant: 'outline', type: 'button',
+            disabled: busy || iBusy || installing,
+            title: t('panel.strip.inst_cuda_tip') + (inst && inst.gpu === true ? ' · ' + t('panel.strip.inst_reco') : ''),
+            className: 'shrink-0 whitespace-nowrap',
+            style: inst && inst.gpu === true ? GOLD : undefined,
+            onClick: () => startInstall('cuda'),
+            children: t('panel.strip.inst_cuda') + (inst && inst.installed && inst.installed.cuda ? ' ✓' : '')
+          }),
+          jsx('span', {
+            className: 'w-full break-words text-[0.6875rem] leading-snug',
+            style: { color: '#fbbf24' },
+            children: t('panel.strip.inst_hint_w')
+          }),
+          jsx(Button, {
+            size: 'xs', variant: 'outline', type: 'button',
+            disabled: busy || iBusy || installing,
+            title: t('panel.strip.inst_whisper_tip'),
+            className: 'shrink-0 whitespace-nowrap',
+            onClick: () => startInstall('whisper'),
+            children: t('panel.strip.inst_whisper') + (inst && inst.installed && inst.installed.whisper ? ' ✓' : '')
+          }),
+          installing ? jsx(Button, {
+            size: 'xs', variant: 'outline', type: 'button',
+            title: t('panel.strip.inst_cancel_tip'),
+            className: 'shrink-0 whitespace-nowrap',
+            onClick: () => { void cancelInstall() },
+            children: t('panel.strip.inst_cancel')
+          }) : null,
+          instLine ? jsx('span', {
+            className: 'w-full break-words text-[0.6875rem] leading-snug',
+            style: { color: instLine.color },
+            children: instLine.text
+          }) : null,
+        ]
+      }),
+      // 行1.5：v0.3.0 下载向导——小白零命令行装权重的入口（amber=主人 UI
+      // 审美定色 11-10/11-16「够亮不刺眼」）；摘要实时反映下载态。
+
+
+      jsxs('div', {
+        className: 'flex min-w-0 items-center gap-1.5',
+        children: [
+          jsx(Button, {
+            size: 'xs',
+            variant: 'outline',
+            type: 'button',
+            onClick: () => setDlOpen(true),
+            title: t('panel.strip.dl_open_tip'),
+            className: 'shrink-0 whitespace-nowrap',
+            style: { color: '#fbbf24', borderColor: 'rgba(251,191,36,.45)' },
+            children: t('panel.strip.dl_open')
+          }),
+          jsx(Button, {
+            size: 'xs',
+            variant: 'outline',
+            type: 'button',
+            onClick: () => api.rest('/logs/open', { method: 'POST', body: {} }).then((r) => {
+              if (!r || r.ok) return
+              notify('error', t('panel.strip.log_open_err') + ' ' + (r.reason_detail || r.reason_code || ''))
+            }).catch(() => notify('error', t('panel.strip.log_open_err'))),
+            title: t('panel.strip.log_open_tip'),
+            className: 'shrink-0 whitespace-nowrap',
+            children: t('panel.strip.log_open')
+          }),
+          jsx('span', {
+            className: 'min-w-0 flex-1 truncate text-[0.6875rem]',
+            style: { color: dlLine.color },
+            children: dlLine.text
+          })
+        ]
+      }),
       // 行2：云端入口按钮+状态摘要；CPU 上限放这行最右（下拉不再被屏幕裁；
       // 测试/保存/返回都在配置框里，框里一行一个字段）。
       jsxs('div', {
@@ -1043,6 +1390,7 @@ function AsrFooter(props) {
         cKey, setCKey, keyTail, msg, cBusy,
         onTest: testCloud, onSave: saveCloud, onClose: closeCloud
       }) : null,
+      dlOpen ? jsx(DownloadDialog, { onClose: () => setDlOpen(false), dl }) : null,
       // 一条状态行：最近一次操作的结果；真·一个引擎都没有时才给短引导
       msg
         ? jsx('div', {
@@ -1058,6 +1406,262 @@ function AsrFooter(props) {
     ]
   })
 }
+/** v0.3.0 下载向导（2026-11-16 主人拍板：小白体验=零命令行/零 venv/零
+ *  pip，UI 拒绝弹窗式打断、网络操作必须带进度条、按钮按依赖门控）。
+ *  后端 engine/downloads.py 实测三官方源速度自动选线（ModelScope /
+ *  hf-mirror / HuggingFace 直连——国内断 VPN 也能下），每个文件 SHA256
+ *  验货通过才算装好；中断/取消后重开点开始即续传（.part 断点）。
+ *  amber 进度条 = 主人「够亮不刺眼」的金黄色（11-10/11-16 两次实锤）。
+ *  进度数据走 AsrFooter 同一条 ['video-xray','dl'] 查询，props 直传。 */
+function DownloadDialog(props) {
+  const { onClose, dl } = props
+  const [kind, setKind] = useState('r2t2')
+  const [vr, setVr] = useState('q8')
+  const [ws, setWs] = useState('small')
+  const [dir, setDir] = useState('')
+  const [seed, setSeed] = useState(false)
+  const [busy, setBusy] = useState('')
+  const [err, setErr] = useState('')
+  const { data: dflt } = useQuery({
+    queryKey: ['video-xray', 'dl-defaults'],
+    queryFn: () => api.rest('/asr/download/defaults', { timeoutMs: 8000 })
+  })
+  // 目录预填一次：whisper → HF 缓存根（下完绿点自动亮，免注册）；
+  // r2t2 → 剩余空间最宽的盘的建议目录（权重 2GB，C 盘党塞不下）
+  useEffect(() => {
+    if (!seed && dflt) {
+      setSeed(true)
+      setDir(kind === 'whisper'
+        ? (dflt.whisper_hub || '')
+        : (dflt.drives && dflt.drives.length
+          ? dflt.drives[0].root + 'AI 语音模型\\R2T2-GGUF' : ''))
+    }
+  }, [seed, dflt])
+  const run = !!dl && dl.state === 'running'
+  const pct = dl && typeof dl.percent === 'number' ? dl.percent : 0
+  const free = dflt && dflt.drives && dir
+    ? dflt.drives.find(v => dir.toUpperCase().startsWith(v.root.toUpperCase()))
+    : null
+  const mbps = dl && dl.rate_bps
+    ? t('panel.strip.dl_speed', (dl.rate_bps / 1e6).toFixed(1)) : ''
+  const eta = dl && dl.eta_s != null && dl.eta_s > 0
+    ? (dl.eta_s >= 120
+      ? t('panel.strip.dl_eta_min', String(Math.ceil(dl.eta_s / 60)))
+      : t('panel.strip.dl_eta_sec', String(dl.eta_s))) : ''
+  async function pick() {
+    try {
+      const d = await api.os.pickOpenPath({
+        title: t('panel.strip.dl_dir'), directories: true
+      })
+      const p = typeof d === 'string' ? d : (d && d.path) || null
+      if (p) setDir(p)
+    } catch { /* 用户按取消，啥也不动 */ }
+  }
+  async function go() {
+    if (busy || run || !dir.trim()) return
+    setBusy('go'); setErr('')
+    try {
+      const r = await api.rest('/asr/download/start', {
+        method: 'POST', timeoutMs: 20000,
+        body: { kind, size: kind === 'r2t2' ? vr : ws, target: dir.trim() }
+      })
+      if (r && r.ok === false) setErr(brText(r))
+    } catch (e) { setErr(friendly(e)) }
+    setBusy('')
+  }
+  async function stop() {
+    if (busy === 'cancel') return
+    setBusy('cancel')
+    try {
+      await api.rest('/asr/download/cancel', { method: 'POST', timeoutMs: 8000 })
+    } catch { /* 状态轮询会兜底显示 */ }
+    setBusy('')
+  }
+  const dS = dl && dl.state
+  const files = (dl && dl.files) || []
+  return jsx('div', {
+    className: 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4',
+    onClick: onClose,
+    children: jsxs('div', {
+      className: 'max-h-[86vh] max-w-[92vw] overflow-y-auto rounded-lg p-4',
+      style: { width: 560, background: 'var(--ui-bg-elevated)', border: '1px solid var(--ui-stroke-primary)', boxShadow: '0 12px 40px rgba(0, 0, 0, 0.45)' },
+      onClick: e => e.stopPropagation(),
+      children: [
+        jsx('div', {
+          className: 'mb-1 text-[0.9rem] font-semibold',
+          style: { color: '#fbbf24' },
+          children: t('panel.strip.dl_title')
+        }),
+        jsx('div', {
+          className: 'mb-3 text-[0.6875rem] leading-relaxed',
+          style: { color: 'var(--ui-text-secondary)' },
+          children: t('panel.strip.dl_note')
+        }),
+        jsxs('label', {
+          className: 'mb-2 block',
+          children: [
+            jsx('div', {
+              className: 'mb-1 text-[0.6875rem]', style: { color: 'var(--ui-text-secondary)' },
+              children: t('panel.strip.dl_kind')
+            }),
+            jsxs('select', {
+              value: kind,
+              onChange: e => setKind(e.target.value),
+              className: 'w-full rounded border border-border bg-background px-2 py-1 text-[0.8125rem] [color-scheme:dark]',
+              children: [
+                jsx('option', { value: 'r2t2', children: t('panel.strip.dl_kind_r') }),
+                jsx('option', { value: 'whisper', children: t('panel.strip.dl_kind_w') })
+              ]
+            })
+          ]
+        }),
+        jsxs('label', {
+          className: 'mb-2 block',
+          children: [
+            jsx('div', {
+              className: 'mb-1 text-[0.6875rem]', style: { color: 'var(--ui-text-secondary)' },
+              children: kind === 'r2t2' ? t('panel.strip.dl_var') : t('panel.strip.dl_wsize')
+            }),
+            jsxs('select', {
+              value: kind === 'r2t2' ? vr : ws,
+              onChange: e => (kind === 'r2t2' ? setVr : setWs)(e.target.value),
+              className: 'w-full rounded border border-border bg-background px-2 py-1 text-[0.8125rem] [color-scheme:dark]',
+              children: kind === 'r2t2'
+                ? [jsx('option', { value: 'q8', children: t('panel.strip.dl_q8') }),
+                   jsx('option', { value: 'q4', children: t('panel.strip.dl_q4') })]
+                : [jsx('option', { value: 'tiny', children: t('panel.strip.dl_w_tiny') }),
+                   jsx('option', { value: 'base', children: t('panel.strip.dl_w_base') }),
+                   jsx('option', { value: 'small', children: t('panel.strip.dl_w_small') }),
+                   jsx('option', { value: 'medium', children: t('panel.strip.dl_w_medium') })]
+            })
+          ]
+        }),
+        jsxs('label', {
+          className: 'mb-1 block',
+          children: [
+            jsx('div', {
+              className: 'mb-1 text-[0.6875rem]', style: { color: 'var(--ui-text-secondary)' },
+              children: t('panel.strip.dl_dir')
+            }),
+            jsxs('div', {
+              className: 'flex min-w-0 items-center gap-1.5',
+              children: [
+                jsx(Input, {
+                  value: dir, onChange: e => setDir(e.target.value),
+                  disabled: run, className: 'h-8 min-w-0 flex-1 text-[0.8rem]'
+                }),
+                jsx(Button, {
+                  size: 'sm', variant: 'outline', type: 'button',
+                  disabled: run || busy !== '', onClick: pick,
+                  className: 'shrink-0 whitespace-nowrap',
+                  children: t('panel.strip.dl_browse')
+                })
+              ]
+            })
+          ]
+        }),
+        free
+          ? jsx('div', {
+              className: 'mb-2 text-[0.625rem]', style: { color: 'var(--ui-text-tertiary)' },
+              children: t('panel.strip.dl_free', String(free.free_gb))
+            })
+          : null,
+        // 进度区：这台机器上有任务痕迹（下载中/中断/失败/完成）就常驻
+        dS && dS !== 'cancelled'
+          ? jsxs('div', {
+              className: 'mb-2 mt-2 rounded p-2',
+              style: { background: 'var(--ui-bg-subtle)', border: '1px solid var(--ui-stroke-secondary)' },
+              children: [
+                dS === 'running' || dS === 'interrupted'
+                  ? jsxs('div', {
+                      className: 'mb-1.5 flex min-w-0 items-center justify-between text-[0.6875rem]',
+                      children: [
+                        jsx('span', { style: { color: '#fbbf24' }, children: t('panel.strip.dl_running', String(pct)) }),
+                        jsx('span', {
+                          className: 'truncate', style: { color: 'var(--ui-text-secondary)' },
+                          children: [mbps, eta].filter(Boolean).join(' · ')
+                        })
+                      ]
+                    })
+                  : null,
+                dS === 'running' || dS === 'interrupted'
+                  ? jsx('div', {
+                      className: 'mb-1 h-1.5 w-full overflow-hidden rounded-full',
+                      style: { background: 'var(--ui-stroke-secondary)' },
+                      children: jsx('div', {
+                        className: 'h-full rounded-full',
+                        style: { width: pct + '%', background: '#fbbf24', transition: 'width .6s' }
+                      })
+                    })
+                  : null,
+                files.slice(0, 6).map(f => jsxs('div', {
+                  className: 'flex min-w-0 items-center justify-between gap-2 text-[0.625rem]',
+                  style: { color: 'var(--ui-text-tertiary)' },
+                  children: [
+                    jsx('span', { className: 'min-w-0 truncate', children: String(f.path || '').split('/').pop() }),
+                    jsx('span', {
+                      className: 'shrink-0',
+                      children: Math.round(f.done / 1e6) + ' / ' + Math.round(f.total / 1e6) + ' MB'
+                    })
+                  ]
+                }, String(f.path))),
+                dS === 'done'
+                  ? jsxs('div', {
+                      className: 'mt-1.5 text-[0.6875rem] leading-relaxed',
+                      style: { color: 'var(--ui-green)' },
+                      children: [
+                        dl.kind === 'whisper' ? t('panel.strip.dl_ready_w') : t('panel.strip.dl_ready_r'),
+                        jsx('div', {
+                          className: 'mt-0.5', style: { color: '#fbbf24' },
+                          children: dl.kind === 'whisper' ? t('panel.strip.dl_after_w') : t('panel.strip.dl_after_r')
+                        })
+                      ]
+                    })
+                  : null,
+                dS === 'error'
+                  ? jsx('div', {
+                      className: 'mt-1.5 text-[0.6875rem]', style: { color: 'var(--ui-red)' },
+                      children: t('panel.strip.dl_failed', beText(dl))
+                    })
+                  : null
+              ]
+            })
+          : null,
+        err
+          ? jsx('div', {
+              className: 'mb-2 text-[0.6875rem]', style: { color: 'var(--ui-red)' }, children: err
+            })
+          : null,
+        jsxs('div', {
+          className: 'flex items-center justify-end gap-1.5',
+          children: [
+            run
+              ? jsx(Button, {
+                  size: 'sm', variant: 'outline', type: 'button',
+                  disabled: busy === 'cancel', onClick: stop,
+                  className: 'shrink-0 whitespace-nowrap',
+                  children: t('panel.strip.dl_cancel')
+                })
+              : null,
+            jsx(Button, {
+              size: 'sm', type: 'button',
+              disabled: run || busy !== '' || !dir.trim(),
+              onClick: go,
+              className: 'shrink-0 whitespace-nowrap',
+              title: !dir.trim() ? t('panel.strip.dl_dir') : undefined,
+              children: busy === 'go' ? t('panel.strip.dl_starting') : t('panel.strip.dl_start')
+            }),
+            jsx(Button, {
+              size: 'sm', variant: 'outline', type: 'button', onClick: onClose,
+              className: 'shrink-0 whitespace-nowrap', children: t('panel.strip.dl_back')
+            })
+          ]
+        })
+      ]
+    })
+  })
+}
+
 function CloudDialog(props) {
   const { cUrl, setCUrl, cModel, setCModel, cModels, setCModels, cKey, setCKey, keyTail, msg, cBusy, onTest, onSave, onClose } = props
   // 宿主没导出 Modal（2026-11-09 dump 运行版全部 677 个 export 实锤），
@@ -1831,6 +2435,25 @@ function Strip() {
   // 云端配置豁免，否则永远上传不了视频的死锁）②转录引擎没登记绿=「立即分析」点不动
   const vd = !String(form.path || '').trim()
   const readyEng = asrReady(form.transcribe, health.data && health.data.asr)
+  // v0.3.0 R4.1（主人 11-17 定罪）：引擎绿圈 ≠ 权重就绪。明确选了引擎但
+  // 调参弹窗里的「模型目录」还没保存过 = 「立即分析」不亮。off/auto 照旧
+  // 永远就绪（auto 后端自会挑已配好目录的那个降级）。
+  const asrK = asrResolved(form.transcribe, health.data && health.data.asr)
+  const mdirOf = (k) => !!String(((health.data && health.data.asr_settings && health.data.asr_settings.params || {})[k] || {}).model_dir || '').trim()
+  // auto 不再无条件豁免（主人 11-17 二次定罪：只挂视频就亮不对）——auto 也得
+  // 至少有一个可用本地引擎已装载模型目录才亮；云端引擎不吃本地目录天然就绪；
+  // 转录=关闭 不受锁。
+  const availMap = (health.data && health.data.asr && health.data.asr.avail) || {}
+  const autoDirOk = ['r2t2', 'whisper'].some((k) => availMap[k] && mdirOf(k)) || !!availMap.openai
+  const mdirOk = asrK === 'off' ? true
+    : asrK === 'auto' ? autoDirOk
+    : mdirOf(asrK)
+  // 灰态 hover 逐条罗列所有还没满足的前置（主人令：别只报第一条）
+  const pend = [
+    vd ? t('panel.strip.need_video_hint') : null,
+    !readyEng ? t('panel.strip.run_locked_engine') : null,
+    readyEng && !mdirOk ? t(asrK === 'auto' ? 'panel.strip.run_locked_mdir_auto' : 'panel.strip.run_locked_mdir') : null,
+  ].filter(Boolean)
 
   return jsxs('div', {
     className: 'flex flex-col gap-1.5 border-b border-(--ui-stroke-secondary) pb-2',
@@ -2048,9 +2671,15 @@ function Strip() {
                   jsx(Button, {
                     size: 'sm',
                     type: 'button',
-                    // 前提不齐就灰着：在跑 / 没视频 / 引擎没登记（hover 说清缺哪条）
-                    disabled: busy || vd || !readyEng,
-                    title: vd ? t('panel.strip.need_video_hint') : (!readyEng ? t('panel.strip.run_locked_engine') : ''),
+                    // 前提不齐就灰着：在跑 / 没视频 / 引擎没登记 / 模型目录
+                    // 没装载（hover 逐条列全缺哪几条，主人 11-17 令）
+                    disabled: busy || pend.length > 0,
+                    title: busy ? t('panel.strip.run_locked_busy') : pend.join('\n'),
+                    // 宿主 Button 基础样式带 disabled:pointer-events-none（button.tsx
+                    // L15），灰态吞掉一切鼠标事件 = title 悬停提示压根不弹。内联
+                    // style 优先级压回 auto：hover 复活出提示，disabled 属性照旧
+                    // 吞点击，不会误触发（11-17 主人实测定罪）。
+                    style: { pointerEvents: 'auto' },
                     onClick: start,
                     children: busy ? t('panel.strip.starting') : t('panel.strip.analyze_now')
                   })

@@ -3,6 +3,66 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-11-17
+
+### Added
+
+- **One-click engine installers (CPU / CUDA / Whisper)** — the panel can now
+  download and unpack the speech-to-text runtime engines themselves from this
+  repository's GitHub Releases assets (with mirror fallback and SHA-256
+  verification). Engines land in `asr-r2t2/` / `asr-whisper/` under the Hermes
+  home directory and Whisper auto-registers itself after a successful install.
+  A global install lock prevents concurrent installs; staging happens under
+  the user's own `%TEMP%\video-xray-install\` and both the zip and the stage
+  directory are removed once unpacked.
+- **Model-weights download wizard** — golden "download weights" button opens a
+  guided wizard for the R2T2 GGUF weights (official `netease-youdao` repos,
+  q4/q8 tiers), the FireRedVAD ONNX bundle and the faster-whisper sizes
+  (official `Systran` repos). Sources are tried mirror-first
+  (hf-mirror.com, ModelScope) with huggingface.co as fallback; downloads are
+  resumable (`.part` across mirrors), SHA-pinned, and cancel at file
+  boundaries.
+- **Machine-readable error codes (i18n protocol)** — every download/install
+  failure now carries a stable code (`reason_code` / `error_code`) plus an
+  English technical detail instead of a locale-baked sentence, so the panel
+  translates failures into the UI language at display time. A switch to an
+  English panel can no longer show Chinese error text (and vice versa).
+- **Load-directory gating for "Analyze now"** — the run button stays locked
+  (with a hover list of every missing prerequisite, including a busy state)
+  until the engine is ready *and* a model directory is actually loaded;
+  leaving the path field empty in the parameter dialog materializes the
+  per-engine default directory on save, so the lock can never deadlock.
+
+- **Action logging inside the plugin directory + an 「Open log」 button** —
+  installs, downloads and transcriptions now leave single-line start/
+  success/failure traces in `plugins/video-xray/logs/video-xray.log`
+  (rotation, English). The panel gained a one-click button that opens that
+  file with the system default viewer, so users can read full failure
+  traces any time — and know which file to attach when reporting one.
+
+### Changed
+
+- Clearer button wording: "Load model directory & set parameters",
+  "Select a local speech-to-text engine directory"; the parameter button
+  keeps a permanent amber accent so its disabled state stays visible.
+- Auto engine mode no longer skips the model-directory check — with no
+  usable local engine and no ready cloud engine, "Analyze now" stays locked.
+- Hover tooltips on disabled buttons are restored by re-enabling pointer
+  events locally (the host button style disables pointer events on
+  `:disabled`, which had been swallowing the tooltips).
+
+### Fixed
+
+- Busy-state hover showed a raw i18n key (`run_locked`) instead of text —
+  the key was missing from both language books.
+- The dashboard `/asr/download/start` route re-wrapped engine rejections as
+  HTTP 400 with a locale-baked message, swallowing the new `reason_code`
+  protocol; rejections now pass through as structured results like every
+  other route.
+- Post-install auto-registration checked the wrong result key
+  (`registered` instead of `ok`), so a successful Whisper install reported a
+  registration warning.
+
 ## [0.2.2] - 2026-11-13
 
 ### Fixed

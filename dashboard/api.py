@@ -29,7 +29,9 @@ _PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 if str(_PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(_PLUGIN_ROOT))
 
-from engine import audio, h3prompt, jobs, llm  # noqa: E402
+from engine import (audio, downloads, h3prompt, installs, jobs, llm, logbox,
+                  logbox as _lx)  # noqa: E402
+_log = _lx.get_logger()
 
 ui = llm.ui
 
@@ -206,6 +208,86 @@ def llm_probe() -> Dict[str, Any]:
     back so the UI shows what was unreachable.
     """
     return llm.probe()
+
+
+# ---- v0.3.0 download wizard (R2T2 weights / whisper sizes) --------------
+@router.get("/asr/download/defaults")
+def asr_download_defaults() -> Dict[str, Any]:
+    """Wizard prefill: local drives by free space + the HF hub cache root
+    the whisper worker already scans. Pure local stat, never blocks."""
+    return downloads.defaults()
+
+
+@router.get("/asr/download/status")
+def asr_download_status() -> Dict[str, Any]:
+    """Download wizard progress projection (percent, per-file bytes,
+    rate/ETA). State is on disk under plugin-data, so a gateway restart
+    neither loses the picture nor double-starts; partial .part files
+    resume on the next start."""
+    return downloads.status()
+
+
+@router.post("/asr/download/start")
+def asr_download_start(payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Kick off one wizard download: kind=r2t2|whisper (+size), target=
+    directory written in official Comfy/HF layout. Mirrors (huggingface.co
+    direct, hf-mirror.com) are probed and pinned automatically, so a
+    domestic user without a proxy still gets bytes flowing."""
+    body = payload or {}
+    # Rejections must NOT be re-wrapped as HTTP 400: pass the engine's raw
+    # {ok:false, reason_code,...} through so the frontend can translate by
+    # code. (Bug hunt 2026-11-17: an HTTPException(detail=<locale-baked text>)
+    # layer here swallowed the reason_code protocol and left the UI showing
+    # raw Chinese strings on an English panel.)
+    return downloads.start(body.get("kind"), str(body.get("target") or ""),
+                           body.get("size"))
+
+
+@router.post("/asr/download/cancel")
+def asr_download_cancel() -> Dict[str, Any]:
+    """Ask the running download to stop; the .part stays for a later
+    resume (same target dir)."""
+    return downloads.cancel()
+
+
+# ---------------------------------------------------------- R4 installs --
+# v0.3.0 panel "安装 CPU / CUDA 引擎" buttons: one-click runtime install
+# of the release packs into <HERMES_HOME>/asr-r2t2/ (the default engine
+# root audio.py already launches, so nothing else needs registering).
+# Owner rules honored backend-side (2026-11-16): user TEMP only, zip +
+# temp subdir deleted after install, single-flight lock.  status also
+# carries the live installed flags + GPU hint the panel uses for button
+# labels and the gold glow.  Full contract in engine/installs.py.
+@router.get("/installs/status")
+def installs_status() -> Dict[str, Any]:
+    """{task, installed:{cpu,cuda}, gpu} — poll while running."""
+    return {"ok": True, "task": installs.status(),
+            "installed": installs.installed_status(),
+            "gpu": installs.gpu_present()}
+
+
+@router.post("/installs/start")
+def installs_start(payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Begin one engine runtime install; payload {variant: cpu|cuda}.
+    CUDA before CPU is refused with a hint; a running install or a
+    running weights download also refuses (mutual exclusion is enforced
+    here, not just in the panel)."""
+    body = payload or {}
+    return installs.start(str(body.get("variant") or ""))
+
+
+@router.post("/installs/cancel")
+def installs_cancel() -> Dict[str, Any]:
+    """Stop the running install; the .part stays so a re-click resumes."""
+    return installs.cancel()
+
+
+@router.post("/logs/open")
+def logs_open() -> Dict[str, Any]:
+    """Open the plugin log (inside the plugin directory) with the system
+    default viewer — the panel's log button posts here; the user is free
+    to inspect full failure traces any time, not only on red lines."""
+    return logbox.open_log()
 
 
 @router.get("/asr/tracks")
@@ -546,3 +628,57 @@ def export_job(job_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     return {"ok": True, "md_path": str(target), "txt_path": str(txt),
             "shots": r.get("shots"), "engine": r.get("engine"),
             "mode": r.get("mode"), "thresh": r.get("thresh"), "warning": r.get("warning")}
+
+
+# ---------------------------------------------------------------------------
+# Plugin-owned error trail: wrap every route endpoint so any 500 leaves a full
+# traceback in <plugin>/logs/video-xray.log (uvicorn alone prints one generic
+# line). The HTTP detail carries the route name + exception so a screenshot
+# pinpoints the failing handler.
+def _wrap_endpoints() -> None:
+    import functools
+    import inspect
+
+    def _mk(fn, coro):
+        @functools.wraps(fn)
+        def sync(*a, **k):
+            try:
+                return fn(*a, **k)
+            except HTTPException:
+                raise
+            except Exception as exc:
+                _log.exception("route %s failed", fn.__name__)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"{fn.__name__}: {type(exc).__name__}: {exc} "
+                           f"— see plugins/{_lx._NAME}/logs/video-xray.log")
+
+        @functools.wraps(fn)
+        async def async_(*a, **k):
+            try:
+                return await fn(*a, **k)
+            except HTTPException:
+                raise
+            except Exception as exc:
+                _log.exception("route %s failed", fn.__name__)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"{fn.__name__}: {type(exc).__name__}: {exc} "
+                           f"— see plugins/{_lx._NAME}/logs/video-xray.log")
+
+        return async_ if coro else sync
+
+    for _route in router.routes:
+        _ep = getattr(_route, "endpoint", None)
+        if _ep is None or getattr(_ep, "_xray_wrapped", False):
+            continue
+        _w = _mk(_ep, inspect.iscoroutinefunction(_ep))
+        _w._xray_wrapped = True
+        _route.endpoint = _w
+
+
+try:
+    _wrap_endpoints()
+    _log.info("dashboard api loaded: %d routes wrapped", len(router.routes))
+except Exception:
+    _log.exception("dashboard api: endpoint wrapping failed")

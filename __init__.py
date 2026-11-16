@@ -15,10 +15,32 @@ log = logging.getLogger(__name__)
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 if _PKG_DIR not in sys.path:            # unified top-level 'engine' key so this
     sys.path.insert(0, _PKG_DIR)        # module and the dashboard's api.py mount
-try:                                   # share ONE engine.llm instance — the ctx
+
+
+def _fallback_log():
+    """Best-effort logger writing to <plugin>/logs/video-xray.log.
+
+    The official loader swallows plugin-import/register tracebacks, so the
+    failure would otherwise only live in gateway logs the user rarely opens
+    (yache-local-voice's logbox pattern, mirrored here).
+    """
+    try:
+        from engine import logbox      # engine/__init__ is a bare docstring,
+        return logbox.get_logger()     # so this cannot fail on heavy deps
+    except Exception:
+        return log
+
+
+try:                                   # share ONE engine.llm instance so the ctx
     from engine import jobs, llm, pipeline   # wiring done in register() is then
 except ImportError:                    # visible to the panel's /llm/probe route.
-    from .engine import jobs, llm, pipeline  # fallback if the host blocks sys.path
+    try:
+        from .engine import jobs, llm, pipeline  # fallback if host blocks sys.path
+    except ImportError:
+        _fallback_log().exception(
+            "video-xray: engine import failed on BOTH paths (pkg_dir=%s)",
+            _PKG_DIR)
+        raise
 
 ui = llm.ui
 
@@ -214,6 +236,18 @@ def _slash_command(raw_args: str) -> str:
 
 
 def register(ctx):
+    # The official loader swallows register-time tracebacks, so mirror any
+    # failure into <plugin>/logs/video-xray.log before re-raising (yache
+    # logbox pattern; R5-C of the v0.3.0 requirements doc).
+    try:
+        _register(ctx)
+    except Exception:
+        _fallback_log().exception("video-xray: register() failed")
+        raise
+    _fallback_log().info("video-xray: registered OK (pkg_dir=%s)", _PKG_DIR)
+
+
+def _register(ctx):
     # Single LLM path: hand the ctx to the engine so every analysis call
     # goes through the host's official plugin LLM API (ctx.llm.complete) --
     # host-resolved provider/model, live routing, zero plugin-specific auth

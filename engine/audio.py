@@ -47,8 +47,10 @@ import uuid
 import wave
 
 from . import llm, sampling
+from .logbox import get_logger
 
 ui = llm.ui
+log = get_logger()
 # NOTE: do not import from .pipeline at module level -- pipeline imports
 # audio, so a top-level back-import hits a partially initialized module
 # (cold-start ImportError). _ts is pulled in lazily where used.
@@ -247,6 +249,27 @@ def _save_reg_section(section, values):
     return st
 
 
+def _norm_model_dir(raw, gguf_required=False):
+    """v0.3.0 R2/R3: optional external weights dir (panel field model_dir).
+
+    Empty keeps today's layout byte-for-byte (R2T2: root\\models; whisper: the
+    HF hub cache under the user profile), so the worker env stays untouched
+    unless the user points it somewhere else on purpose.
+    """
+    mdl = str(raw.get("model_dir") or "").strip().strip('"')
+    if mdl:
+        if not os.path.isdir(mdl):
+            raise ValueError(ui(f"模型目录不存在：{mdl}",
+                                f"model dir does not exist: {mdl}"))
+        if gguf_required and not any(
+                fn.lower().endswith(".gguf") for fn in os.listdir(mdl)):
+            raise ValueError(ui(
+                "该目录里没有 *.gguf 权重（应选存放 conf*.gguf 的 models 目录）",
+                "no *.gguf weights in that dir; pick the models folder "
+                "holding conf*.gguf"))
+    return mdl
+
+
 def _norm_engine_params(eng, raw):
     """Whitelist-normalize one engine's params. Raises ValueError carrying a
     bilingual reason for anything out of range; unknown keys are dropped."""
@@ -268,6 +291,7 @@ def _norm_engine_params(eng, raw):
                                 f"language {lang} is not in the R2T2 list"))
         out["language"] = "" if lang.lower() in ("", "auto") else lang
         out["hotwords"] = str(raw.get("hotwords") or "").strip()[:2000]
+        out["model_dir"] = _norm_model_dir(raw, gguf_required=True)
     elif eng == "whisper":
         dev = str(raw.get("device") or "auto").strip().lower()
         if dev not in WHISPER_DEVICES:
@@ -282,6 +306,7 @@ def _norm_engine_params(eng, raw):
         lang = str(raw.get("language") or "").strip()
         out["language"] = "" if lang.lower() in ("", "auto") else lang
         out["hotwords"] = str(raw.get("hotwords") or "").strip()[:2000]
+        out["model_dir"] = _norm_model_dir(raw)
     else:
         raise ValueError(ui("该引擎没有参数设置", "this engine has no parameters"))
     return out
@@ -321,6 +346,10 @@ def _r2t2_env(extra=None):
     hw = str(p.get("hotwords") or "").strip()
     if hw:
         env["VA_R2T2_HOTWORDS"] = hw
+    mdl = str(p.get("model_dir") or "").strip()
+    if mdl:
+        env["VA_R2T2_MODEL_DIR"] = mdl
+        env["VA_R2T2_VAD_DIR"] = os.path.join(mdl, "FireRedVAD-ONNX")
     return env
 
 
@@ -333,6 +362,9 @@ def _whisper_env(extra=None):
     hw = str(p.get("hotwords") or "").strip()
     if hw:
         env["VA_ASR_PROMPT"] = hw
+    mdl = str(p.get("model_dir") or "").strip()
+    if mdl:
+        env["VA_WHISPER_MODEL_DIR"] = mdl
     return env
 
 
@@ -807,6 +839,12 @@ def _cloud_transcribe(pcm_bytes, timeout, cfg=None):
     return f"{_ts(0)} {text}"
 
 
+def _asr_trace(eng: str, text, t0: float) -> None:
+    """One line per completed transcription into the plugin log."""
+    log.info("asr: engine=%s ok %.1fs %d chars", eng,
+             time.monotonic() - t0, len(text or ""))
+
+
 def transcribe_cues(pcm_bytes, engine=None, timeout=900, cancel=None):
     """Transcribe window PCM. Returns (text, engine_used) or (None, used/None).
 
@@ -827,6 +865,7 @@ def transcribe_cues(pcm_bytes, engine=None, timeout=900, cancel=None):
         eng = "auto"
     device = s["device"]
     cpu = s["cpu_percent"]
+    t0 = time.monotonic()
     avail = engines_available()
     impl = {"r2t2": lambda: _r2t2_transcribe(pcm_bytes, timeout, cpu, cancel=cancel),
             "whisper": lambda: _whisper_transcribe(pcm_bytes, timeout, cpu, cancel=cancel),
@@ -837,14 +876,18 @@ def transcribe_cues(pcm_bytes, engine=None, timeout=900, cancel=None):
         if not avail[eng]:
             raise RuntimeError(ui(f"转录引擎 {eng} 不可用：", f"ASR engine {eng} unavailable: ")
                                + _missing_reason(eng))
-        return impl[eng](), eng
+        _txt = impl[eng]()
+        _asr_trace(eng, _txt, t0)
+        return _txt, eng
     ladder = ("whisper", "r2t2", "cloud") if device == "gpu" else ("r2t2", "whisper", "cloud")
     errors = []
     for name in ladder:
         if not avail[name]:
             continue
         try:
-            return impl[name](), name
+            _txt = impl[name]()
+            _asr_trace(name, _txt, t0)
+            return _txt, name
         except Exception as e:  # noqa: BLE001 -- collect and try the next rung
             if cancel is not None:
                 # user cancelled mid-rung: never "helpfully" start the next
@@ -858,8 +901,12 @@ def transcribe_cues(pcm_bytes, engine=None, timeout=900, cancel=None):
                                           "speech transcription cancelled"))
             errors.append(f"{name}: {type(e).__name__}: {str(e)[:200]}")
     if errors:
+        log.error("asr: auto ladder exhausted (%.1fs): %.500s",
+                  time.monotonic() - t0, " | ".join(errors))
         raise RuntimeError(ui("所有可用转录引擎都失败了：\n",
                               "every available ASR engine failed:\n") + "\n".join(errors))
+    log.warning("asr: auto found no configured engine (%.1fs)",
+                time.monotonic() - t0)
     raise RuntimeError(ui(
         "这台机器没有任何可用的转录引擎：R2T2 运行时未安装、本地 Whisper 未配 venv、"
         "云端 ASR 未配置。装好任意一个都会自动启用；或把转录引擎设为\"关闭\"只分析画面",
@@ -1122,6 +1169,13 @@ def asr_settings_view():
                 "r2t2_languages": list(R2T2_LANGUAGES),
                 "whisper_devices": list(WHISPER_DEVICES),
                 "whisper_sizes": list(WHISPER_SIZES),
+                # v0.3.0 R3 gray placeholders: where weights actually live
+                # when the model-dir field is left empty.
+                "r2t2_model_dir_default": (
+                    os.path.join(_ASR_ROOT, "models") if _ASR_ROOT else ""),
+                "whisper_model_dir_default": os.path.join(
+                    os.path.expanduser("~"), ".cache",
+                    "huggingface", "hub"),
             }}
 
 
