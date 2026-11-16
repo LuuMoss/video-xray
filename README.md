@@ -3,7 +3,7 @@
 > A video + audio analysis workbench plugin for **Hermes Desktop**.
 > One run = **windowed frame sampling** → **per-segment visual observation** → **timestamped transcript** → **structured report** → **shot-accurate reverse prompt for AI video generation**.
 
-![Main panel](docs/screenshots/02-panel-main.png)
+![Main panel](docs/screenshots/02-panel-main-v030.png)
 
 - UI language: **English / Simplified Chinese**, follows your Hermes display language automatically; other locales fall back to English (translation PRs welcome)
 - Author: Xiaoya / [LuuMoss](https://github.com/LuuMoss) · License: Apache-2.0 (see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md))
@@ -181,7 +181,7 @@ After a job completes, the detail view exports the report (`.md`) and the revers
 ![Presets dropdown — six analysis presets + free-form prompt](docs/screenshots/03-panel-presets.png)
 *Processing mode: six built-in presets, or `custom` to write your own observation prompt.*
 
-![Shot-cut threshold & parameters](docs/screenshots/02-panel-main.png)
+![Shot-cut threshold & parameters](docs/screenshots/02-panel-main-v030.png)
 *After attaching a video: time window, granularity, shot-cut threshold, transcription engine radio group and the register/params buttons.*
 
 ![Reverse-prompt style](docs/screenshots/04-panel-h3style.png)
