@@ -54,7 +54,7 @@ Then fully quit Hermes Desktop and reopen it (this restarts the gateway and load
 %LOCALAPPDATA%\hermes\desktop-plugins\video-xray\plugin.js
 ```
 
-and press `Ctrl+Shift+R` in the desktop app to reload the UI.
+and press `Ctrl+R` in the desktop app to reload the UI.
 
 You should now see the golden **Video Analysis Workbench** strip above the composer. `/video` opens it too, and chatting "analyze this video" works via the agent tools.
 
@@ -159,7 +159,7 @@ After a job completes, the detail view exports the report (`.md`) and the revers
 
 | Symptom | Fix |
 |---|---|
-| No golden strip above the composer | Make sure step ② (enable + gateway restart) was done; press `Ctrl+Shift+R`; check `%LOCALAPPDATA%\hermes\logs\desktop.log` for `[plugins]` lines |
+| No golden strip above the composer | Make sure step ② (enable + gateway restart) was done; press `Ctrl+R`; check `%LOCALAPPDATA%\hermes\logs\desktop.log` for `[plugins]` lines |
 | "Analyze now" says engine not ready | Analysis uses your **current chat model** — send one normal chat message first to confirm the model is up |
 | Report shows `transcript=no` | There simply was no speech in that window (SFX/music only) — normal |
 | R2T2 registration refuses to save | Pick the **root** folder containing `worker.py`; make sure `runtime\python\python.exe` and the `models\` four-piece set are in place (layout above) |
