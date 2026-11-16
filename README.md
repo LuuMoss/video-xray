@@ -58,6 +58,8 @@ and press `Ctrl+R` in the desktop app to reload the UI.
 
 You should now see the golden **Video Analysis Workbench** strip above the composer. `/video` opens it too, and chatting "analyze this video" works via the agent tools.
 
+**Next — one-click install a transcription engine.** The 3 steps above install the plugin only; the speech engines themselves are fetched inside the panel: click the golden strip, hit **Install CPU engine** (auto-registers when done), then **Download model weights…** for the speech weights. Zero command line — see [Transcription engines](#transcription-engines) below, or keep using the manual routes further down if you prefer.
+
 ![After install: the workbench strip, idle](docs/screenshots/01-panel-idle.png)
 
 ## Transcription engines (all optional — the plugin runs without any of them)
