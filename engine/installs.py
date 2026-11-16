@@ -306,6 +306,7 @@ def _run(variant: str) -> None:
                          "cancelled — partial bytes resume on the next "
                          "install click")
     except Exception as exc:  # noqa: BLE001 — code lets the panel localize
+        log.warning("install: _run crash variant=%s", variant, exc_info=True)
         st["state"] = "failed"
         st["error"] = f"{type(exc).__name__}: {exc}"
         st["error_code"] = ("cancelled" if _cancel_event.is_set()
@@ -322,7 +323,7 @@ def _run(variant: str) -> None:
         else:
             log.error("install: FAILED variant=%s code=%s detail=%.200s",
                       variant, st.get("error_code"),
-                      str(st.get("error_detail") or ""))
+                      str(st.get("error_detail") or st.get("error") or ""))
 
 
 # ---------------------------------------------------------------- api -----
@@ -362,28 +363,28 @@ def start(variant: str) -> Dict[str, Any]:
     global _thread
     variant = (variant or "").strip().lower()
     if variant not in VARIANTS:
-        return _rej({{"ok": False, "reason_code": "bad_variant",
+        return _rej({"ok": False, "reason_code": "bad_variant",
                 "reason_detail": variant,
-                "reason": ui("未知引擎类型", "unknown engine variant")}})
+                "reason": ui("未知引擎类型", "unknown engine variant")})
     with _LOCK:
         st = _load()
         if st.get("state") == "running" and _thread and _thread.is_alive():
-            return _rej({{"ok": False, "reason_code": "busy", "reason": ui(
+            return _rej({"ok": False, "reason_code": "busy", "reason": ui(
                 "已有一个引擎安装在跑——请先取消或等它完成",
                 "an engine install is already running — cancel it or "
-                "wait for it to finish")}})
+                "wait for it to finish")})
         if downloads.status().get("state") == "running":
-            return _rej({{"ok": False, "reason_code": "dl_busy", "reason": ui(
+            return _rej({"ok": False, "reason_code": "dl_busy", "reason": ui(
                 "已有权重下载在跑——请先取消或等它完成（下载与安装互斥）",
                 "a weights download is running — cancel it or wait "
-                "(downloads and installs are mutually exclusive)")}})
+                "(downloads and installs are mutually exclusive)")})
         if variant == "cuda" and not _installed("cpu"):
-            return _rej({{"ok": False, "reason_code": "cuda_first", "reason": ui(
+            return _rej({"ok": False, "reason_code": "cuda_first", "reason": ui(
                 "请先安装 CPU 引擎库——CUDA 包只含 GPU 加速件，"
                 "worker 与嵌入式 Python 都在 CPU 包里",
                 "install the CPU engine pack first — the CUDA pack only "
                 "carries GPU accel files; the worker and embedded python "
-                "come from the CPU pack")}})
+                "come from the CPU pack")})
         st = {"variant": variant, "state": "running", "phase": "",
               "files": [], "percent": 0, "error": None,
               "error_code": None, "error_detail": None,

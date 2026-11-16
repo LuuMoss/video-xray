@@ -3,6 +3,28 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.1] - 2026-11-17
+
+### Fixed
+
+- **CUDA gate rejection no longer fails with HTTP 500** — the "install the CPU
+  pack first" rejection carried a literal double-brace artifact in its reason
+  text, which crashed the server with `TypeError: cannot use 'dict' as a set
+  element` instead of showing the friendly notice.
+- **Downloads no longer abort with a misleading "every source unavailable"
+  error** — a progress/log line inside the downloader referenced a variable
+  that does not exist in its scope; the exception fired on the *success* path
+  and was swallowed by the network-retry handler, so healthy downloads looked
+  like network failures. Fixed properly and verified end-to-end with a real
+  50 MB release download plus SHA-256 check.
+
+### Changed
+
+- The install banner in the panel (and the README) now spells out the required
+  order for NVIDIA users: **install the CPU pack first, then the CUDA
+  add-on — order matters**. The previous wording left first-time users free to
+  click the CUDA button first and hit the gate.
+
 ## [0.3.0] - 2026-11-17
 
 ### Added

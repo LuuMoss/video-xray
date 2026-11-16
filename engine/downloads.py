@@ -333,7 +333,7 @@ def _fetch_one(urls, dest: str, total: int, sha, st: dict, idx: int,
             _verify(part, sha)
             os.replace(part, dest)
             log.info("download: file ok %s (%.1f MB)",
-                     name, dest.stat().st_size / 1e6)
+                     os.path.basename(dest), os.path.getsize(dest) / 1e6)
             return
         except urllib.error.HTTPError as exc:
             if exc.code in (416,) and total and os.path.exists(part):

@@ -99,7 +99,7 @@ Any **OpenAI-compatible** `/v1/audio/transcriptions` service: fill base URL + mo
 
 R2T2 is NetEase Youdao's open-source [Confucius4-R2T2](https://github.com/netease-youdao/Confucius4-R2T2) speech engine (code Apache-2.0; weights free for commercial use).
 
-**One-click (recommended):** workbench panel → **Install engine** → *CPU runtime* (or *CUDA runtime* for NVIDIA GPUs), then **Download weights…** → R2T2 (Q8_0 or Q4_K_M) — the wizard fetches the GGUF weights from the official NetEase Youdao repos and the FireRedVAD ONNX bundle, verifies every SHA-256, and registers the engine when done. CPU is the recommended default: benchmarked on par with CUDA on this small model, and it keeps your VRAM free.
+**One-click (recommended):** workbench panel → **Install engine** → *CPU runtime* — NVIDIA GPU users install this first; the *CUDA runtime* comes **after**, as an add-on (order matters), then **Download weights…** → R2T2 (Q8_0 or Q4_K_M) — the wizard fetches the GGUF weights from the official NetEase Youdao repos and the FireRedVAD ONNX bundle, verifies every SHA-256, and registers the engine when done. CPU is the recommended default: benchmarked on par with CUDA on this small model, and it keeps your VRAM free.
 
 <details>
 <summary>Manual route (advanced) — same target layout, fetched by hand</summary>
@@ -118,7 +118,7 @@ Target layout:
 
 **① Adapter layer**: copy `worker.py`, `smoke.py` and `core/` from this repo's `docs/r2t2-runtime/` into `%LOCALAPPDATA%\hermes\asr-r2t2\` (the same files the one-click pack carries).
 
-**② Runtime** (~51 MB CPU): download `r2t2-runtime-cpu-windows-x64.zip` from this repo's [Releases](https://github.com/LuuMoss/video-xray/releases) and unpack it to `%LOCALAPPDATA%\hermes\asr-r2t2\` — the archive already has the layout above (`runtime\` included; `models\` stays empty). Pack names carry no version on purpose: they are generic Windows x64 runtimes reused unchanged across plugin releases. NVIDIA GPUs only: overlay `r2t2-runtime-cuda-windows-x64.zip` (~510 MB, just the cuBLAS/cuDART trio) on top of the same directory — the CUDA pack is an add-on, not a replacement.
+**② Runtime** (~51 MB CPU): download `r2t2-runtime-cpu-windows-x64.zip` from this repo's [Releases](https://github.com/LuuMoss/video-xray/releases) and unpack it to `%LOCALAPPDATA%\hermes\asr-r2t2\` — the archive already has the layout above (`runtime\` included; `models\` stays empty). Pack names carry no version on purpose: they are generic Windows x64 runtimes reused unchanged across plugin releases. NVIDIA GPUs only, and only after the CPU pack finished installing: overlay `r2t2-runtime-cuda-windows-x64.zip` (~510 MB, just the cuBLAS/cuDART trio) on top of the same directory — the CUDA pack is an add-on, not a replacement.
 
 **③ Weights** (~3.5 GB): the four GGUF files from [netease-youdao/Confucius4-R2T2-GGUF](https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF) (Q8_0 or Q4_K_M tier — filenames match the layout below, no renaming):
 
