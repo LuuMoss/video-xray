@@ -299,7 +299,7 @@ def assemble_llm(shot_evs, edges, cues, mode, max_tokens=1400):
         # on every call, silently downgrading ALL LLM polish to the rule path
         # while info["engine"] still claimed "llm". Keep to the real signature.
         content, finish, _ = llm.chat(parts, temperature=0.2, max_tokens=max_tokens,
-                                      timeout=180, reasoning_effort="none")
+                                      timeout=None, reasoning_effort="none")
     except Exception:
         return None
     txt = (content or "").strip()

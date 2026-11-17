@@ -99,6 +99,15 @@ def main():
             initial_prompt=(_env("VA_ASR_PROMPT") or None))
         cues = [{"s": round(s.start, 2), "e": round(s.end, 2), "text": s.text.strip()}
                 for s in segments if s.text.strip()]
+        if not cues and len(wav) < 15 * 32000:
+            # VAD 把超短/超静语音整段吞掉的兜底（主人 2026-11-17:1.5s -90dB 的 6 字台词交白卷）:
+            # 16k s16 下 15 秒=32000 字节/秒；短料免 VAD 盲转一次，长片仍归 VAD 管。
+            segments, _info = model.transcribe(
+                io.BytesIO(wav), beam_size=1, vad_filter=False,
+                language=(lang or None),
+                initial_prompt=(_env("VA_ASR_PROMPT") or None))
+            cues = [{"s": round(s.start, 2), "e": round(s.end, 2), "text": s.text.strip()}
+                    for s in segments if s.text.strip()]
         print(json.dumps(cues, ensure_ascii=False))
     finally:
         sys.stdout.flush()

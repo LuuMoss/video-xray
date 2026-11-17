@@ -129,6 +129,15 @@ _ENV_KEEP = {"PATH", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC",
 def _worker_env(extra=None):
     env = {k: v for k, v in os.environ.items() if k.upper() in _ENV_KEEP}
     env.update(extra or {})
+    # Force UTF-8 on the worker's stdio (11-17, transcript mojibake). Without
+    # this CPython picks the machine's ANSI codepage for stdout — GBK on a
+    # zh-CN Windows, cp1252 on en-US — while _run_worker decodes as UTF-8,
+    # so every non-ASCII cue comes back mangled. Both variables together
+    # cover every Python 3.x regardless of locale: PEP 540 (PYTHONUTF8) for
+    # 3.7+, PYTHONIOENCODING for the older ones. setdefault so a caller can
+    # still override.
+    env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
     return env
 ENGINE = "auto"  # fallback engine choice when nobody configured one
 
@@ -963,6 +972,18 @@ def _verify_load(cmd, timeout, extra_env=None):
                     settings()["cpu_percent"], extra_env)
     except Exception as e:  # noqa: BLE001 -- one clean panel reason
         tail = " ".join(str(e).split())[-300:]
+        # VAD 三件套缺失＝"直挂权重目录"的自伤：网易官方 GGUF 包本就不含
+        # FireRedVAD-ONNX。用户不该看 Python traceback，大白话＋缺的目录给出来。
+        if "assets missing in" in tail:
+            where = tail.split("assets missing in", 1)[1].strip() or "?"
+            return False, ui(
+                "这个权重文件夹缺 VAD 语音检测组件（FireRedVAD-ONNX 三件套），"
+                "网易官方 GGUF 包本身不含它。点面板上金色的「下载模型权重…」"
+                "按钮补齐，或把 FireRedVAD-ONNX 拷进：" + where,
+                "this weights folder is missing the VAD speech-detection assets "
+                "(FireRedVAD-ONNX; the official NetEase GGUF package does not "
+                "include them). Download via the gold Download-weights button, "
+                "or copy FireRedVAD-ONNX into: " + where)
         return False, ui("引擎能选但真机加载验证失败：" + (tail or "无输出"),
                          "the folder looks right but the engine failed to load: "
                          + (tail or "no output"))

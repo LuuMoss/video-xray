@@ -3,6 +3,40 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.2] - 2026-11-17
+
+### Fixed
+
+- **Chinese (and all CJK) transcriptions turned to mojibake after the first
+  3 minutes** — the ASR worker printed its UTF-8 transcript into a stdout
+  pipe that Windows reinterpreted as Windows-1252, so every line past the
+  first segment arrived as Latin garbage ("Èø½s" for 这). The engine now
+  forces UTF-8 on both sides of the pipe (child env `PYTHONUTF8=1` +
+  `reconfigure(encoding="utf-8")`). Verified on a real 13-minute clip:
+  0 mojibake lines out of 92, 407 CJK chars intact; a mixed zh+en sample
+  round-trips 43/43 lines.
+- **Very short audio (<0.98 s) no longer aborts the whole transcription
+  job.** The VAD model physically cannot emit a segment under ~1 s, so the
+  worker now blind-transcribes that audio once and continues.
+- **Missing VAD weights are named in plain words.** Mounting a weights
+  folder without the VAD trio used to fail with an internal "vad_onnx
+  required" error; the panel now says which files are missing and where to
+  get them.
+- **Radio-row ghost clicks** — clicking the golden download button while
+  the settings dialog was already open could re-toggle the engine radio
+  underneath; rows are now inert while the dialog is up and the engine
+  selection survives every reload.
+- **H3 prompt-reverse and long exports are no longer killed at a fixed
+  180 s**, matching the 21-minute cap the panel already waits for.
+
+### Changed
+
+- Engine selection and saved forms are written to one live source of
+  truth the moment you touch them — restarting Hermes no longer reverts
+  the panel to a stale snapshot.
+- The finished-jobs strip truncates its own title instead of letting a
+  long line overlap it (full text on hover).
+
 ## [0.3.1] - 2026-11-17
 
 ### Fixed

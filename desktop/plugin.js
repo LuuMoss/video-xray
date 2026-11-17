@@ -175,7 +175,7 @@ const B = {
       refused: '{{0}} 条没删掉：{{1}}', refused_reason: '后端拒绝',
       deleted_n: '已删除 {{0}} 条任务',
       cleared_all: '已删除 {{0}} 条已结束任务', cleared_skip: '（{{0}} 条在跑，已跳过）', cleared_bad: '（{{0}} 条删不掉）',
-      done_line: '✅ 已完成：{{0}} · 报告已在对话里',
+      done_line: '已完成：{{0}} · 报告已在对话里',   // ✅ 摘除：emoji 顶在收起行开头会遮住工作台标题（主人 2026-11-17 点名）
       whole: '整个视频', dur: '{{0}}秒', t_on: '转录开', t_off: '转录关',
       auto_note: '⚡ 附件已按这套参数起作业：{{0}}',
       select_all: '全选', deleting: '删除中', del_n: '删除({{0}})', del: '删除',
@@ -371,7 +371,7 @@ const B = {
       refused: '{{0}} job(s) not deleted: {{1}}', refused_reason: 'rejected by backend',
       deleted_n: 'Deleted {{0}} job(s)',
       cleared_all: 'Cleared {{0}} finished job(s)', cleared_skip: ' ({{0}} still running, skipped)', cleared_bad: ' ({{0}} could not be deleted)',
-      done_line: '✅ Done: {{0}} · the report is in the chat',
+      done_line: 'Done: {{0}} · the report is in the chat',   // emoji 摘除同上（主人 2026-11-17）
       whole: 'full video', dur: '{{0}}s', t_on: 'transcription on', t_off: 'transcription off',
       auto_note: '⚡ Attachment started with these settings: {{0}}',
       select_all: 'Select all', deleting: 'Deleting…', del_n: 'Delete ({{0}})', del: 'Delete',
@@ -526,6 +526,7 @@ function t(key) {
 }
 
 // form persistence: ctx.storage = sync { get(key, fallback) / set(key, value) } (verified against source)
+let _dlgClosedAt = 0   // 弹窗关闭时刻：500ms 内的 radio 写入一律没收（浏览器转点幽灵，主人 2026-11-17 案终版药）
 function loadForm() {
   try {
     const f = { ...DEF_FORM, ...(api.storage.get('form', {}) || {}) }
@@ -812,8 +813,9 @@ function AsrRadios(props) {
             type: 'radio',
             name: 'video-xray-asr',
             checked: resolved === e,
-            disabled: vd || !has,
-            onChange: () => set({ transcribe: e }),
+            disabled: vd || !has || !!dlg,   // 弹窗开着=行禁用：遮罩 fixed 在 WSLg-Electron 下不盖住行区，点遮罩关窗会被转点成身后 radio（主人 2026-11-17 案终局：row-click e=r2t2 无鼠标指纹）
+            onClick: ev => { if (dlg) { ev.preventDefault() } },
+            onChange: () => { if (Date.now() - _dlgClosedAt < 500) return; if (!dlg) set({ transcribe: e }) },   // 弹窗开着/刚关 500ms 内=禁写（转点幽灵与遮罩形态无关，主人 2026-11-17 案）
             className: 'h-3.5 w-3.5 shrink-0 cursor-pointer',
           style: { accentColor: 'var(--ui-green)', opacity: has ? 1 : 0.45 }
           }),
@@ -831,7 +833,7 @@ function AsrRadios(props) {
             // 主人 UI 审美定色：amber-400 金黄常驻（11-17 令：灰态也要金黄+有边框），
             // 禁用感靠组件自身 opacity 表达，不再靠褪色
             style: { color: '#fbbf24', borderColor: 'rgba(251,191,36,.55)' },
-            onClick: ev => { ev.preventDefault(); ev.stopPropagation(); if (cfgOn) setDlg(e) },
+            onClick: ev => { ev.preventDefault(); ev.stopPropagation(); if (dlg) { setDlg(''); setTimeout(() => cfgOn && setDlg(e), 0) } else if (cfgOn) setDlg(e) },
             onMouseDown: ev => ev.stopPropagation(),
             children: t('panel.strip.params_btn')
           }) : null
@@ -843,7 +845,7 @@ function AsrRadios(props) {
     className: 'flex min-w-0 flex-col',
     children: [
       ['r2t2', 'whisper', 'cloud', 'off'].map(row),
-      dlg ? jsx(ParamsDialog, { eng: dlg, settings, videoPath: form.path, onClose: () => setDlg('') }) : null
+      dlg ? jsx(ParamsDialog, { eng: dlg, settings, videoPath: form.path, onClose: () => { _dlgClosedAt = Date.now(); setDlg('') } }) : null
     ]
   })
 }
@@ -928,6 +930,7 @@ function ParamsDialog(props) {
       } catch (e) { /* 存不上不碍事 */ }
       queryClient.invalidateQueries({ queryKey: ['video-xray', 'health'] })
       setPMsg({ ok: true, text: t('panel.strip.p_saved') + note })
+      // 参数保存=纯存参数，不改引擎选择（11-17 案定论）
     } catch (e) { setPMsg({ ok: false, text: friendly(e) }) }
     setPBusy('')
   }
@@ -963,9 +966,10 @@ function ParamsDialog(props) {
   return jsx('div', {
     className: 'fixed inset-0 z-50 flex items-center justify-center p-4',
     style: { background: 'rgba(0,0,0,0.55)' },
-    onMouseDown: onClose, // 点遮罩=返回；内层吞掉点击
+    onMouseUp: () => setTimeout(onClose, 80), // 点遮罩=返回；延 80ms 拆窗让 click 序列走完，防转点身后 radio（主人 2026-11-17 小绿圈案）
     children: jsxs('div', {
       onMouseDown: e => e.stopPropagation(),
+      onMouseUp: e => e.stopPropagation(),
       className: 'flex max-w-[92vw] flex-col gap-2.5 rounded-xl border p-4',
       style: { width: 520 },
       style: { background: 'var(--ui-bg-elevated)', borderColor: 'var(--ui-stroke-secondary)', boxShadow: '0 12px 40px rgba(0,0,0,0.5)' },
@@ -1669,9 +1673,10 @@ function CloudDialog(props) {
   return jsx('div', {
     className: 'fixed inset-0 z-50 flex items-center justify-center p-4',
     style: { background: 'rgba(0,0,0,0.55)' },
-    onMouseDown: onClose, // 点遮罩=返回；内层吞掉点击
+    onMouseUp: () => setTimeout(onClose, 80), // 点遮罩=返回；延 80ms 拆窗让 click 序列走完，防转点身后 radio（主人 2026-11-17 小绿圈案）
     children: jsxs('div', {
       onMouseDown: e => e.stopPropagation(),
+      onMouseUp: e => e.stopPropagation(),
       className: 'flex max-w-[92vw] flex-col gap-2.5 rounded-xl border p-4',
       style: { width: 440 },
       style: { background: 'var(--ui-bg-elevated)', borderColor: 'var(--ui-stroke-secondary)', boxShadow: '0 12px 40px rgba(0,0,0,0.5)' },
@@ -1885,7 +1890,7 @@ function JobDetail(props) {
       const r = await api.rest(`/jobs/${encodeURIComponent(j.id)}/h3`, {
         method: 'POST',
         body: h3opts(),
-        timeoutMs: 120000
+        timeoutMs: 1260000
       })
       if (!r?.ok) throw new Error(String(r?.error ?? t('panel.detail.h3_missing')))
       await api.os?.writeClipboard?.(String(r.h3 ?? ''))
@@ -1926,7 +1931,7 @@ function JobDetail(props) {
       const r = await api.rest(`/jobs/${encodeURIComponent(j.id)}/export`, {
         method: 'POST',
         body: { path, ...h3opts() },
-        timeoutMs: 120000
+        timeoutMs: 1260000
       })
       if (!r?.ok) throw new Error(String(r?.error ?? t('panel.detail.write_failed')))
       flashNow({
@@ -2224,7 +2229,9 @@ function JobList(props) {
 }
 
 function Strip() {
-  const [form, setForm] = useState(loadForm)
+  // 单一真源=模块级 panel.form（宿主 storage.get 在重建瞬间可能给旧快照，
+  // 落盘只当持久化镜像用；2026-11-17 小绿圈案：收起/弹窗返回即回退）
+  const [form, setForm] = useState(() => panel.form || loadForm())
   // rebuild instantly on language switch: a Strip re-render re-evaluates t() in every child component
   const [, bumpLocale] = useState(0)
   useEffect(() => api.i18n?.onLocaleChange?.(() => bumpLocale(x => x + 1)), [])
@@ -2294,7 +2301,9 @@ function Strip() {
   // moment the strip is opened again (params or task list), so the flag
   // needs no explicit reset path.
   const [liveHidden, setLiveHidden] = useState(false)
-  const set = patch => setForm(f => ({ ...f, ...patch }))
+  // 表单每改一下立刻落盘（引擎选择、参数都当场存），面板无论怎么重建——折叠
+  // 再展开、程序重启、热载——都不会退回"上次点立即分析"的旧快照。
+  const set = patch => setForm(f => { const nf = { ...f, ...patch }; panel.form = nf; saveForm(nf);  return nf })
   // 中间件捡到粘贴/拖进输入框的视频（+号的视频选项已拿掉，这是剩下的入口），把
   // 路径镜像进工作台：全插件视频路径只有这一个真源，参数弹窗的音轨下拉跟着对。
   panel.setPath = p => set({ path: String(p || '') })
@@ -2315,6 +2324,7 @@ function Strip() {
     host.notify({ kind: 'info', message: t('panel.strip.probe_ok', LLM_LIVE?.model ?? '?', LLM_LIVE?.provider ?? '') })
     try {
       const r = await api.rest('/analyze', { method: 'POST', body: b, timeoutMs: 20000 })
+      panel.form = form
       saveForm(form)
       setSel(r?.id ?? null)
       setLiveHidden(false)
@@ -2471,7 +2481,7 @@ function Strip() {
                 className: 'shrink-0 text-(--ui-accent)',
                 children: open ? '▼' : '▶'
               }),
-              jsx('span', { className: 'shrink-0', children: t('panel.strip.title') }),
+              jsx('span', { className: 'min-w-0 shrink truncate', title: t('panel.strip.title'), children: t('panel.strip.title') }),   // 主人 2026-11-17 定罪：完成长行把无防护的标题挤得叠字——标题空间不足自己截尾+hover 全称
               // 视频没进来时提示紧跟标题空几格亮金黄显示（主人 2026-11-09 点名要显眼），
               // 展开/收起两种状态都跟着标题走
               vd
