@@ -34,10 +34,12 @@
 
 > Windows paths. `%LOCALAPPDATA%` is usually `C:\Users\<you>\AppData\Local`.
 
-**① Backend** — copy the plugin files from the **root of this repo** (`plugin.yaml`, `__init__.py`, `engine/`, `dashboard/`) to:
+**① Backend** — grab `video-xray-v0.3.3.zip` from the [latest release](https://github.com/LuuMoss/video-xray/releases/latest) and unzip it (or clone/copy this repo). Unzip tools — including Windows "Extract All" — often wrap the files in a folder named after the zip, e.g. `video-xray-v0.3.3`. **Rename that folder to plain `video-xray`** before installing: Hermes registers a plugin under its **folder name**, so a folder still carrying the version suffix will not load as `video-xray`. Then place it so it reads:
 
 ```
-%LOCALAPPDATA%\hermes\plugins\video-xray\
+%LOCALAPPDATA%\hermes\plugins\video-xray\plugin.yaml
+%LOCALAPPDATA%\hermes\plugins\video-xray\engine\
+%LOCALAPPDATA%\hermes\plugins\video-xray\dashboard\
 ```
 
 **② Enable + restart the gateway:**
