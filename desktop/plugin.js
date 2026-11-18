@@ -526,6 +526,9 @@ function t(key) {
 }
 
 // form persistence: ctx.storage = sync { get(key, fallback) / set(key, value) } (verified against source)
+// 小绿圈案临时探针（2026-11-17）：状态事件一行进后端日志（video-xray.log）
+const udbg = msg => { try { api.rest('/debug', { method: 'POST', body: { msg }, timeoutMs: 2500 }).catch(() => {}) } catch (e) {} }
+let _lastBoot = ""   // /health 的网关启动签名；变了=网关重启过，path 清零
 let _dlgClosedAt = 0   // 弹窗关闭时刻：500ms 内的 radio 写入一律没收（浏览器转点幽灵，主人 2026-11-17 案终版药）
 function loadForm() {
   try {
@@ -535,8 +538,10 @@ function loadForm() {
     // 视频路径每次装载都置空：路径只在本会话有效——重启后文件可能已被挪走/删掉，
     // 沿用上次的旧路径反而制造 BUG（主人 2026-11-09 定）；其余参数照旧持久化
     f.path = ''
+    udbg('loadForm t=' + f.transcribe)
     return f
   } catch {
+    udbg('loadForm FAIL -> DEF t=' + DEF_FORM.transcribe)
     return { ...DEF_FORM }
   }
 }
@@ -794,6 +799,7 @@ const langLabel = (uiZh, n) => (uiZh && LANG_ZH[n]) ? LANG_ZH[n] + '（' + n + '
 function AsrRadios(props) {
   const { form, set, avail, settings } = props
   const resolved = asrResolved(form.transcribe, avail)
+  useEffect(() => { udbg('radios t=' + form.transcribe + ' resolved=' + resolved) }, [resolved, form.transcribe])
   // 视频没上传 = 引擎选择/参数按钮整块灰掉（主人 2026-11-09 定：先看片再调参，
   // 不然 R2T2 弹窗里的音轨下拉无从探测，参数读出来是错的）
   const vd = !String(form.path || '').trim()
@@ -814,8 +820,9 @@ function AsrRadios(props) {
             name: 'video-xray-asr',
             checked: resolved === e,
             disabled: vd || !has || !!dlg,   // 弹窗开着=行禁用：遮罩 fixed 在 WSLg-Electron 下不盖住行区，点遮罩关窗会被转点成身后 radio（主人 2026-11-17 案终局：row-click e=r2t2 无鼠标指纹）
-            onClick: ev => { if (dlg) { ev.preventDefault() } },
-            onChange: () => { if (Date.now() - _dlgClosedAt < 500) return; if (!dlg) set({ transcribe: e }) },   // 弹窗开着/刚关 500ms 内=禁写（转点幽灵与遮罩形态无关，主人 2026-11-17 案）
+            onMouseDown: ev => udbg('row-mousedown e=' + e + ' ev=' + (ev && (ev.detail !== undefined ? 'user:' + ev.detail : 'program'))),
+            onClick: ev => { if (dlg) { ev.preventDefault(); return void udbg('row-guard-blocked e=' + e) } udbg('row-click e=' + e) },
+            onChange: () => { if (Date.now() - _dlgClosedAt < 500) return void udbg('post-close-block e=' + e); if (!dlg) set({ transcribe: e }) },   // 弹窗开着/刚关 500ms 内=禁写（转点幽灵与遮罩形态无关，主人 2026-11-17 案）
             className: 'h-3.5 w-3.5 shrink-0 cursor-pointer',
           style: { accentColor: 'var(--ui-green)', opacity: has ? 1 : 0.45 }
           }),
@@ -833,7 +840,7 @@ function AsrRadios(props) {
             // 主人 UI 审美定色：amber-400 金黄常驻（11-17 令：灰态也要金黄+有边框），
             // 禁用感靠组件自身 opacity 表达，不再靠褪色
             style: { color: '#fbbf24', borderColor: 'rgba(251,191,36,.55)' },
-            onClick: ev => { ev.preventDefault(); ev.stopPropagation(); if (dlg) { setDlg(''); setTimeout(() => cfgOn && setDlg(e), 0) } else if (cfgOn) setDlg(e) },
+            onClick: ev => { ev.preventDefault(); ev.stopPropagation(); if (dlg) { udbg('gold-while-dlg eng=' + e); setDlg(''); setTimeout(() => cfgOn && setDlg(e), 0) } else if (cfgOn) setDlg(e) },
             onMouseDown: ev => ev.stopPropagation(),
             children: t('panel.strip.params_btn')
           }) : null
@@ -856,7 +863,7 @@ function AsrRadios(props) {
  *  下方共享行（音轨/声道/字幕偏移）两家通用——它们活在 ffmpeg 和字幕
  *  数学里，不在任一引擎内部，一套控件接住用户手里各式各样的片子。 */
 function ParamsDialog(props) {
-  const { eng, settings, videoPath, onClose } = props
+  const { eng, settings, videoPath, onClose, onSaved } = props
   const isR = eng === 'r2t2'
   const sp = (settings && settings.params && settings.params[eng]) || {}
   const au = (settings && settings.audio) || {}
@@ -930,7 +937,7 @@ function ParamsDialog(props) {
       } catch (e) { /* 存不上不碍事 */ }
       queryClient.invalidateQueries({ queryKey: ['video-xray', 'health'] })
       setPMsg({ ok: true, text: t('panel.strip.p_saved') + note })
-      // 参数保存=纯存参数，不改引擎选择（11-17 案定论）
+      udbg('dlg-saved eng=' + eng)   // 参数保存=纯存参数，不改引擎选择（11-17 案定论）
     } catch (e) { setPMsg({ ok: false, text: friendly(e) }) }
     setPBusy('')
   }
@@ -966,7 +973,7 @@ function ParamsDialog(props) {
   return jsx('div', {
     className: 'fixed inset-0 z-50 flex items-center justify-center p-4',
     style: { background: 'rgba(0,0,0,0.55)' },
-    onMouseUp: () => setTimeout(onClose, 80), // 点遮罩=返回；延 80ms 拆窗让 click 序列走完，防转点身后 radio（主人 2026-11-17 小绿圈案）
+    onMouseUp: () => { udbg('mask-up'); setTimeout(onClose, 80) }, // 点遮罩=返回；延 80ms 拆窗让 click 序列走完，防转点身后 radio（主人 2026-11-17 小绿圈案）
     children: jsxs('div', {
       onMouseDown: e => e.stopPropagation(),
       onMouseUp: e => e.stopPropagation(),
@@ -1673,7 +1680,7 @@ function CloudDialog(props) {
   return jsx('div', {
     className: 'fixed inset-0 z-50 flex items-center justify-center p-4',
     style: { background: 'rgba(0,0,0,0.55)' },
-    onMouseUp: () => setTimeout(onClose, 80), // 点遮罩=返回；延 80ms 拆窗让 click 序列走完，防转点身后 radio（主人 2026-11-17 小绿圈案）
+    onMouseUp: () => { udbg('mask-up'); setTimeout(onClose, 80) }, // 点遮罩=返回；延 80ms 拆窗让 click 序列走完，防转点身后 radio（主人 2026-11-17 小绿圈案）
     children: jsxs('div', {
       onMouseDown: e => e.stopPropagation(),
       onMouseUp: e => e.stopPropagation(),
@@ -2277,6 +2284,17 @@ function Strip() {
     refetchInterval: 6000
   })
   if (health.data?.asr) ASR_AVAIL = health.data.asr
+  // 网关重启检测（主人 11-19 定）：签名一变说明后端换过进程，这次装载的视频
+  // 多半是被分析完/半途折掉的那条——工作台回到干净装载态：path 清零，其余
+  // 参数（引擎/粒度/预设/字幕）原样保留。桌面端重载那条路由 loadForm 清零把关。
+  if (health.data?.boot) {
+    if (_lastBoot && health.data.boot !== _lastBoot && panel.form?.path) {
+      panel.form.path = ""
+      saveForm(panel.form)
+      udbg("boot-changed -> path cleared, params kept")
+    }
+    _lastBoot = health.data.boot
+  }
   const jobs = list.data?.jobs ?? []
   const live = jobs.find(j => LIVE.has(j.status))
   const newest = jobs[0]
@@ -2303,7 +2321,7 @@ function Strip() {
   const [liveHidden, setLiveHidden] = useState(false)
   // 表单每改一下立刻落盘（引擎选择、参数都当场存），面板无论怎么重建——折叠
   // 再展开、程序重启、热载——都不会退回"上次点立即分析"的旧快照。
-  const set = patch => setForm(f => { const nf = { ...f, ...patch }; panel.form = nf; saveForm(nf);  return nf })
+  const set = patch => setForm(f => { const nf = { ...f, ...patch }; panel.form = nf; saveForm(nf); if ('transcribe' in patch) udbg('set t=' + nf.transcribe + ' via=' + Object.keys(patch).join(',')); return nf })
   // 中间件捡到粘贴/拖进输入框的视频（+号的视频选项已拿掉，这是剩下的入口），把
   // 路径镜像进工作台：全插件视频路径只有这一个真源，参数弹窗的音轨下拉跟着对。
   panel.setPath = p => set({ path: String(p || '') })

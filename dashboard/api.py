@@ -75,16 +75,31 @@ def _load_or_404(job_id: str) -> Dict[str, Any]:
     return rec
 
 
+# 网关启动签名：模块装载时掷一次随机数。面板每 6s 轮 /health，签名一变=
+# 网关重启过（11-19 主人定：重启后工作台必须回干净装载态——path 清零、
+# 参数全留。loadForm 的 path 清零只在桌面端重载时跑，管不到网关重启这条路）。
+_BOOT = os.urandom(6).hex()
+
+
 @router.get("/health")
 def health() -> Dict[str, Any]:
     """Panel liveness probe + machine capability report: which ASR engines
     this machine actually has (drives the panel hint) and the merged ASR
     settings (engine/device/cpu cap)."""
     st = audio.asr_settings_view()
-    return {"ok": True, "job_dir": str(jobs.JOB_DIR),
+    return {"ok": True, "job_dir": str(jobs.JOB_DIR), "boot": _BOOT,
             "asr": audio.engines_available(),
             "asr_registered": st["registered"],
             "asr_settings": st}
+
+
+@router.post("/debug")
+def ui_debug(payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Ephemeral frontend breadcrumbs for the 小绿圈 state investigation
+    (2026-11-17): plugin POSTs one line per interesting state event; we
+    just echo it into the log so the dev can replay the UI timeline."""
+    _log.info("UI-DEBUG %s", (payload or {}).get("msg"))
+    return {"ok": True}
 
 
 @router.post("/asr/register")
@@ -314,7 +329,15 @@ def list_jobs(limit: int = 30) -> Dict[str, Any]:
 
 import re as _re
 
-_NOTE_TS = _re.compile(r"^(?:[-*]\s*)?\[\s*(\d+:\d+(?::\d+)?)(?:\s*[-~]\s*\d+:\d+(?::\d+)?)?\s*\]")
+# 11-19 血观音案：小模型的记谱口癖会漂移（裸连字符 ↔ markdown 加粗 +
+# en/em-dash 时间分隔），解析器只认一种写法时，模型一换姿势画廊整条
+# 蒸发。这里对格式方差免疫：bullet/加粗星号可选、方括号可选、时间
+# 区间分隔收编 - – — ~ ～ 至 到。
+_NOTE_TS = _re.compile(
+    r"^\s*[-*+>]*\s*\**\s*\[?\s*"
+    r"(\d{1,2}:\d{1,2}(?::\d{1,2})?)"
+    r"(?:\s*[-\u2013\u2014~～至到]+\s*\d{1,2}:\d{1,2}(?::\d{1,2})?)?"
+    r"\s*\**\s*\]?")
 
 
 def _mmss_to_s(t: str) -> float:

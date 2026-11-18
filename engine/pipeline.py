@@ -134,20 +134,150 @@ def _summary_budget(notes, transcript):
     """Summary budget scales with segment count: a thinking model spends part
     of max_tokens on reasoning, and a fixed 2500 cut report endings on
     multi-segment jobs (11-06 measured: 4 segments broke mid-sentence).
-    1500=thinking reserve, 800=report skeleton, 700/segment=timeline body,
-    600=dialogue area when a transcript exists."""
-    return max(2500, min(1500 + 800 + 700 * max(1, len(notes))
-                          + (600 if transcript else 0), 16000))
+    2500=thinking reserve (v0.3.3: Flash-Next class models reason far
+    heavier than the 11-06 calibration; a 4-segment job truncated inside
+    a 1500 reserve), 800=report skeleton, 1000/segment=timeline body,
+    600=dialogue area when a transcript exists, 24000=hard ceiling
+    (long jobs go two-level via _summarize_long instead of pressing the
+    ceiling — see _LONG_SEGMENTS)."""
+    return max(2500, min(2500 + 800 + 1000 * max(1, len(notes))
+                          + (600 if transcript else 0), 24000))
+
+
+_LONG_SEGMENTS = 20     # past this a single pass presses the ceiling
+# 11-19 主人 35min 粗化预设案：4 段×9 分钟(转录 12K 字)照样吃穿单层
+# 预算——段数少但每段巨大同样压顶。笔记+转录合计超此字数也走两级。
+_LONG_INPUT_CHARS = 8000  # notes+transcript chars past which we go two-level
+_CHAPTER_SEGS = 8       # segments per chapter in the two-level pass
+
+
+def _chapter_budget(n):
+    """Two-level chapter pass: every chapter gets its own budget, so total
+    cost grows linearly with video length instead of one flat ceiling
+    choking on long jobs (v0.3.3 B: 30-minute videos = ~45 segments)."""
+    return 2500 + 600 + 600 * n
+
+
+def _summarize_long(notes, transcript):
+    """Two-level summary for long videos (> _LONG_SEGMENTS segments):
+    chapter briefs first — each chapter gets an independent budget, and
+    the transcript stays out of level 1 (the notes already carry what the
+    frames plus dialogue looked like) — then one final pass writes the
+    whole-video report from the briefs plus the full transcript, same
+    report shape as the single-level pass. An empty chapter brief falls
+    back to that chapter's raw notes so no stretch of the video is ever
+    silently dropped; only the final report's own truncation marks
+    the report truncated."""
+    chapters = [notes[i:i + _CHAPTER_SEGS]
+                for i in range(0, len(notes), _CHAPTER_SEGS)]
+    briefs = []
+    for idx, ch in enumerate(chapters, 1):
+        sub_msgs = [llm.text_part(
+            ui(f"你是视频分析师。下面是全片共{len(chapters)}章里第{idx}章按时间顺序的分段观察记录，",
+                   f"You are a video analyst. Below are the time-ordered segment "
+                   f"observation notes of chapter {idx} of {len(chapters)}. ")
+                + ui("为本章写紧凑小结：\n1) 一句话本章脉络\n"
+                     "2) 时间线（时间范围 → 事件），保留原记录里的时间戳，覆盖每段关键内容\n"
+                     "只依据记录内容，记录里没写的不许编。\n\n观察记录：\n",
+                     "Write a compact chapter brief:\n1) one sentence for the chapter's arc\n"
+                     "2) a timeline (time range -> events) keeping the timestamps from the "
+                     "notes and covering each segment's key content\n"
+                     "Use only what the notes contain; never invent what is not written "
+                     "there.\n\nObservation notes:\n")
+                + "\n\n".join(ch))]
+        sub_budget = _chapter_budget(len(ch))
+        content, finish, _u = llm.chat(
+            sub_msgs, temperature=0.7, max_tokens=sub_budget,
+            reasoning_effort="none")
+        content = content or ""
+        if finish == "length" and content.strip():
+            # 小结也是中间品，同样配续写（11-19 血观音案：话痨模型
+            # 预算不够时小结丢尾，最终报告跟着缺一角）。
+            sub_msgs = [llm.text_part(
+                sub_msgs[0]["text"] + "\n\n"
+                + ui("上面的章节小结写到一半断了，请从中断处接完，"
+                     "不要重复已写内容：",
+                     "The chapter brief above was cut off mid-stream; "
+                     "finish it without repeating what is already "
+                     "written:")
+                + "\n" + content[-600:])]
+            more, finish, _u = llm.chat(
+                sub_msgs, temperature=0.7,
+                max_tokens=min(sub_budget * 2, 16000),
+                reasoning_effort="none")
+            if (more or "").strip():
+                content += "\n" + more.strip()
+        briefs.append(content.strip() if content.strip()
+                      else "\n\n".join(ch))
+    joined = ("\n\n" + ui("—— 章节小结 ——", "—— chapter brief ——")
+              + "\n\n").join(
+                  ui(f"第{i}章小结：\n", f"chapter {i} brief:\n") + b
+                  for i, b in enumerate(briefs, 1))
+    audio = (ui("\n\n语音转录时间线(带时间戳，分析对白/旁白时引用)：\n",
+                "\n\nSpeech transcript timeline (timestamped; cite it when "
+                "analyzing dialogue/narration):\n") + transcript
+             if transcript else "")
+    final_msgs = [llm.text_part(
+            ui("你是视频分析师。下面是一部较长影片按时间顺序的分章小结",
+               "You are a video analyst. Below are the chapter-by-chapter "
+               "briefs of a longer film, in time order")
+            + ui("和语音转录" if transcript else "",
+                 " and the speech transcript" if transcript else "")
+            + ui("，输出结构化总结：\n1) 一段话概述全片\n2) 分段时间线（时间范围 → 事件，可按章归组）",
+                 ", output a structured summary:\n1) one paragraph covering "
+                 "the whole film\n2) a timeline (time range -> events, "
+                 "grouped by chapter where natural)")
+            + ui("\n3) 对白/声音要点与画面如何互相印证" if transcript else "",
+                 "\n3) dialogue/audio highlights and how they corroborate "
+                 "the visuals" if transcript else "")
+            + ui("\n只依据小结与转录内容，里面没写的不许编。\n\n分章小结：\n",
+                 "\nUse only what the briefs and transcript contain; never "
+                 "invent what is not written there.\n\nChapter briefs:\n")
+            + joined + audio)]
+    # 最后层的预算按"覆盖全片章节体量"给（每章折 _CHAPTER_SEGS 段，
+    # 24 段封顶），不按章数抠——11-19 血观音案：4 段 1 章只分到 4900
+    # tokens，喂着 12K 字全量转录，写到 9886 字被铡在最后收束段前。
+    budget = _summary_budget([0] * min(24, len(chapters) * _CHAPTER_SEGS),
+                             transcript)
+    content, finish, _u = llm.chat(
+        final_msgs, temperature=0.7, max_tokens=budget,
+        reasoning_effort="none")
+    content = (content or "").strip()
+    if finish == "length" and content:
+        # 两级最后层的续写兜底（此前真身是裸的：截尾只打旗不补救）。
+        final_msgs = [llm.text_part(
+            final_msgs[0]["text"] + "\n\n"
+            + ui("上面那份报告写到一半断了，请从中断处接着写完，"
+                 "直到完整收尾，不要重复已写内容：",
+                 "The report above was cut off mid-stream; continue it "
+                 "to a complete finish without repeating what is "
+                 "already written:")
+            + "\n" + content[-600:])]
+        more, finish, _u2 = llm.chat(
+            final_msgs, temperature=0.7,
+            max_tokens=min(budget * 2, 16000),
+            reasoning_effort="none")
+        if (more or "").strip():
+            content += "\n" + more.strip()
+    # 旗只报最终报告自己的截断（11-19 血观音假报案：正文完整收尾，
+    # 旗却被章节小结的旧截断累加值拖累误挂）。finish 此时=最后层
+    # （含续写）的 finish，正是最终报告的体检结论。
+    return content, finish == "length"
 
 
 def _summarize(notes, transcript=None):
+    # v0.3.3 B: long jobs go two-level so the report never dies at a flat
+    # ceiling; short jobs keep the single pass (cheaper, same shape).
+    if (len(notes) > _LONG_SEGMENTS or
+            (transcript and len("\n".join(notes)) + len(transcript)
+             > _LONG_INPUT_CHARS)):
+        return _summarize_long(notes, transcript)
     body = "\n\n".join(notes)
     audio = (ui("\n\n语音转录时间线(带时间戳，分析对白/旁白时引用)：\n",
                 "\n\nSpeech transcript timeline (timestamped; cite it when "
                 "analyzing dialogue/narration):\n") + transcript
              if transcript else "")
-    content, finish, _u = llm.chat(
-        [llm.text_part(
+    msgs = [llm.text_part(
             ui("你是视频分析师。根据下面按时间顺序的分段观察记录",
                "You are a video analyst. Based on the time-ordered segment "
                "observation notes below")
@@ -163,10 +293,27 @@ def _summarize(notes, transcript=None):
             + ui("\n只依据记录内容，记录里没写的不许编。\n\n观察记录：\n",
                  "\nUse only what the notes contain; never invent what is "
                  "not written there.\n\nObservation notes:\n")
-            + body + audio)],
-        temperature=0.7, max_tokens=_summary_budget(notes, transcript),
+            + body + audio)]
+    budget = _summary_budget(notes, transcript)
+    content, finish, _u = llm.chat(
+        msgs, temperature=0.7, max_tokens=budget,
         reasoning_effort="none")
-    return content.strip(), finish == "length"
+    content = (content or "").strip()
+    if finish == "length" and content:
+        # 第三层保险：漏进两级射程之外的单层截断也能续写补全。
+        msgs = [llm.text_part(
+            msgs[0]["text"] + "\n\n"
+            + ui("上面那份报告写到一半断了，请从中断处接着写完，"
+                 "直到完整收尾，不要重复已写内容：",
+                 "The report above was cut off mid-stream; continue it to a "
+                 "complete finish without repeating what is already written:")
+            + "\n" + content[-600:])]
+        more, finish, _u2 = llm.chat(
+            msgs, temperature=0.7, max_tokens=min(budget * 2, 16000),
+            reasoning_effort="none")
+        if (more or "").strip():
+            content += "\n" + more.strip()
+    return content, finish == "length"
 
 
 def _asr_engine(transcribe):

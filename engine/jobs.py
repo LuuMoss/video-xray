@@ -62,8 +62,12 @@ def _asr_param(val):
 
 # Ids arriving over REST/CLI are user input: strict whitelist (the
 # official catalog _validate_name recipe) so nothing escapes JOB_DIR
-# via ../ or separators.
-_ID_RE = re.compile(r"[A-Za-z0-9._-]{1,128}")
+# via ../ or separators. Unicode-aware since v0.3.3: \w covers letters
+# and digits of any script, so CJK video names survive instead of
+# throwing "invalid job id" at ledger time. Traversal characters
+# (slash, backslash, colon, space, < > | ? * ) stay outside the class
+# and the explicit ".." check below still fires.
+_ID_RE = re.compile(r"[\w.-]{1,128}", re.UNICODE)
 
 
 def _safe(job_id):

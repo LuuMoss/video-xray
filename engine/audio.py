@@ -765,7 +765,13 @@ def settings():
 
 
 def engines_available():
-    """What this machine can transcribe with right now (panel hint + health)."""
+    """What this machine can transcribe with right now (panel hint + health).
+
+    账本每探现读现刷新（11-19 血观音案：whisper 登记被外部进程补写回后，
+    网关内存的 _WHISPER_PY_FALLBACK 还停在开机扫到的空值——登记只在网关
+    自己 register 时 reconfigure，外部写要重启才生效。health 是秒级轮询，
+    多几次 os.path.isfile 的成本可忽略，换来"账本变=面板变"的实时一致。）"""
+    _apply_registered(_load_state())
     py = _whisper_python()
     return {"r2t2": os.path.isfile(_ASR_PY) and os.path.isfile(_WORKER),
             "whisper": bool(py) and os.path.isfile(py) and os.path.isfile(_WHISPER_WORKER),

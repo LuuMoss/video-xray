@@ -3,6 +3,48 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.3] - 2026-11-19
+
+### Fixed
+
+- **Non-ASCII video filenames no longer fail the job-id check.** Files named
+  in Chinese, Japanese, Korean, Arabic, Cyrillic, Greek and every other
+  script Windows allows (the stem was generated Unicode-aware but validated
+  against an ASCII-only whitelist), so 「当你老了.mp4」 died with
+  "invalid job id" before analysis even started. The whitelist now accepts
+  any Unicode word character; verified end-to-end on real CJK files.
+- **The "summary tail was truncated" banner no longer lies on long videos.**
+  Four separate causes, all closed: the report token budget now scales with
+  per-segment allocation and a larger ceiling (2500 thinking reserve +
+  1000/segment, cap 24000); two-level chapter summarization also triggers on
+  *content volume* (>8000 chars), not just segment count, so dialogue-heavy
+  short-segment videos take the chaptered path too; every summarization pass
+  (single, chapter, final) now auto-continues when the model stops exactly
+  at its token limit; and the final merge sizes its budget by the transcript
+  it must cover rather than the number of chapters.
+- **False truncation flags from chapter sub-passes.** A chapter that hit its
+  own limit used to permanently taint the finished report's flag even when
+  the final merge wrote cleanly to the end. The flag now reflects only the
+  final pass.
+- **The scene-gallery strip survives LLM timestamp drift.** The report
+  writer sometimes decorates its time ranges (`- **[00:08–00:41]**` with
+  bold markers and en-dashes instead of `- [00:08-00:41]`). The gallery
+  parser now tolerates bullet markers, bold, optional brackets and every
+  common dash variant — all 22/22 lines parse on both real-world formats
+  captured in the field.
+- **Engine registration changes apply without restarting the gateway.**
+  The health probe re-reads the engine registry every poll instead of
+  trusting the boot-time snapshot, so a registered or repaired engine turns
+  the panel radio green within seconds.
+
+### Changed
+
+- **The workbench resets to a clean load state when the gateway restarts.**
+  The panel notices the restart within 6 s (per-boot signature on /health),
+  clears the loaded video path, and keeps every analysis parameter — no
+  more analyzing against a stale path that belonged to the previous backend.
+
+
 ## [0.3.2] - 2026-11-17
 
 ### Fixed
