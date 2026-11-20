@@ -34,7 +34,7 @@
 
 > Windows paths. `%LOCALAPPDATA%` is usually `C:\Users\<you>\AppData\Local`.
 
-**① Backend** — grab `video-xray-v0.3.3.zip` from the [latest release](https://github.com/LuuMoss/video-xray/releases/latest) and unzip it (or clone/copy this repo). Unzip tools — including Windows "Extract All" — often wrap the files in a folder named after the zip, e.g. `video-xray-v0.3.3`. **Rename that folder to plain `video-xray`** before installing: Hermes registers a plugin under its **folder name**, so a folder still carrying the version suffix will not load as `video-xray`. Then place it so it reads:
+**① Backend** — grab `video-xray-v0.3.3.zip` from the [latest release](https://github.com/LuuMoss/video-xray/releases/latest) and unzip it (or clone/copy this repo). The zip already contains a ready-named top-level folder `video-xray/` — **nothing to rename**: Hermes registers a plugin under its **folder name**. (If your unzip tool wraps it in an extra folder named after the zip — Windows "Extract All" does — just use the inner `video-xray` folder.) Then place it so it reads:
 
 ```
 %LOCALAPPDATA%\hermes\plugins\video-xray\plugin.yaml
@@ -47,6 +47,11 @@
 ```bat
 "%LOCALAPPDATA%\hermes\bin\hermes.exe" plugins enable video-xray
 ```
+
+Or without a command line: open **Settings → Plugins** — freshly installed
+plugins typically do **not** show up in the default list, so type the full
+name `video-xray` into the **search box** at the top of the page; the entry
+and its enable switch only appear through search.
 
 Then fully quit Hermes Desktop and reopen it (this restarts the gateway and loads the backend).
 
